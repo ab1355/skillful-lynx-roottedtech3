@@ -18,6 +18,7 @@ class Agent:
         self.task_history = []
         self.last_knowledge_share = 0
         self.last_information_request = 0
+        self.performance_by_task_type = defaultdict(lambda: {'success': 0, 'total': 0})
 
     async def process_task(self, task: Task) -> Tuple[str, float]:
         processing_time = task.complexity * (1 / self.reputation)
@@ -26,6 +27,8 @@ class Agent:
         success = random.random() < success_probability
         result = 1.0 if success else 0.0
         self.task_history.append((task.task_id, result))
+        self.performance_by_task_type[task.domain]['success'] += result
+        self.performance_by_task_type[task.domain]['total'] += 1
         return task.task_id, result
 
     def update_knowledge(self, new_knowledge: Dict[str, Any]):
@@ -39,7 +42,7 @@ class Agent:
                 self.knowledge_base[key] = value
 
     def decide_knowledge_to_share(self) -> Dict[str, Any]:
-        return {k: v for k, v in self.knowledge_base.items() if v.get('confidence', 0) > 0.7}
+        return {k: v for k, v in self.knowledge_base.items() if v.get('confidence', 0) > 0.6}  # Lowered threshold
 
     async def request_information(self, topic: str, mas: 'MultiAgentSystem'):
         self.last_information_request = mas.current_time
@@ -55,16 +58,22 @@ class Agent:
         self.model.set_parameters(parameters)
 
     def should_share_knowledge(self, current_time: int) -> bool:
-        return current_time - self.last_knowledge_share >= 10
+        return current_time - self.last_knowledge_share >= 5  # Decreased interval
 
     def should_request_information(self, current_time: int) -> bool:
-        return current_time - self.last_information_request >= 15
+        return current_time - self.last_information_request >= 7  # Decreased interval
+
+    def get_best_specialization(self) -> str:
+        if not self.performance_by_task_type:
+            return self.specialization
+        return max(self.performance_by_task_type, key=lambda x: self.performance_by_task_type[x]['success'] / max(1, self.performance_by_task_type[x]['total']))
 
 class MultiAgentSystem:
     def __init__(self, agents: List[Agent]):
         self.agents = agents
         self.task_history = defaultdict(list)
         self.current_time = 0
+        self.log = []
 
     async def allocate_tasks(self, tasks: List[Task]):
         for task in tasks:
@@ -74,6 +83,7 @@ class MultiAgentSystem:
             else:
                 chosen_agent = self._choose_agent_for_task(self.agents, task)
             await chosen_agent.task_queue.put(task)
+        self.log.append(f"Time {self.current_time}: Allocated {len(tasks)} tasks")
 
     def _choose_agent_for_task(self, agents: List[Agent], task: Task) -> Agent:
         agent_scores = []
@@ -83,7 +93,9 @@ class MultiAgentSystem:
             specialization_score = 2 if agent.specialization == task.domain else 1
             total_score = performance_score * workload_score * specialization_score
             agent_scores.append((agent, total_score))
-        return max(agent_scores, key=lambda x: x[1])[0]
+        chosen_agent = max(agent_scores, key=lambda x: x[1])[0]
+        self.log.append(f"Time {self.current_time}: Chose {chosen_agent.agent_id} for task {task.task_id}")
+        return chosen_agent
 
     def _calculate_agent_performance(self, agent: Agent) -> float:
         if not agent.task_history:
@@ -97,18 +109,21 @@ class MultiAgentSystem:
         for agent, (task_id, success_rate) in zip(self.agents, results):
             self.task_history[agent.agent_id].append((task_id, success_rate))
             self._update_agent_reputation(agent)
+        self.log.append(f"Time {self.current_time}: Processed {len(results)} tasks")
 
     def _update_agent_reputation(self, agent: Agent):
         recent_performance = self._calculate_agent_performance(agent)
         task_diversity = len(set(task_id for task_id, _ in agent.task_history[-20:]))
         knowledge_contribution = len(agent.knowledge_base) / 10  # Assuming a max of 10 knowledge items is good
         agent.reputation = 0.5 * recent_performance + 0.3 * (task_diversity / 20) + 0.2 * knowledge_contribution
+        self.log.append(f"Time {self.current_time}: Updated {agent.agent_id} reputation to {agent.reputation:.2f}")
 
     def federated_learning_round(self):
         parameters_list = [agent.get_parameters() for agent in self.agents]
-        aggregated_parameters = secure_aggregate(parameters_list)
+        aggregated_parameters = secure_aggregate(parameters_list, epsilon=0.5)  # Increased epsilon for less noise
         for agent in self.agents:
             agent.set_parameters(aggregated_parameters)
+        self.log.append(f"Time {self.current_time}: Completed federated learning round")
 
     async def collaborative_exchange(self):
         for agent in self.agents:
@@ -118,10 +133,12 @@ class MultiAgentSystem:
                     if other_agent != agent:
                         other_agent.update_knowledge(knowledge_to_share)
                 agent.last_knowledge_share = self.current_time
+                self.log.append(f"Time {self.current_time}: {agent.agent_id} shared knowledge")
 
             if agent.should_request_information(self.current_time):
-                topic = random.choice(list(agent.knowledge_base.keys()))
+                topic = random.choice(list(agent.knowledge_base.keys())) if agent.knowledge_base else "general"
                 await agent.request_information(topic, self)
+                self.log.append(f"Time {self.current_time}: {agent.agent_id} requested information on {topic}")
 
     async def handle_information_request(self, requesting_agent: Agent, topic: str) -> Any:
         for agent in self.agents:
@@ -131,13 +148,16 @@ class MultiAgentSystem:
 
     def add_agent(self, agent: Agent):
         self.agents.append(agent)
+        self.log.append(f"Time {self.current_time}: Added new agent {agent.agent_id}")
 
     def remove_agent(self, agent: Agent):
         if agent in self.agents:
             self.agents.remove(agent)
+            self.log.append(f"Time {self.current_time}: Removed agent {agent.agent_id}")
 
     def evaluate_system_performance(self):
         overall_performance = sum(agent.reputation for agent in self.agents) / len(self.agents)
+        self.log.append(f"Time {self.current_time}: System performance: {overall_performance:.2f}")
         return overall_performance
 
     async def run_simulation(self, num_steps: int):
@@ -147,13 +167,23 @@ class MultiAgentSystem:
             self.federated_learning_round()
             await self.collaborative_exchange()
 
-            if self.current_time % 50 == 0:
+            if self.current_time % 10 == 0:  # Check every 10 steps
                 performance = self.evaluate_system_performance()
-                if performance < 0.5 and len(self.agents) > 3:
+                if performance < 0.4 and len(self.agents) > 3:
                     worst_agent = min(self.agents, key=lambda a: a.reputation)
                     self.remove_agent(worst_agent)
-                elif performance > 0.8 and len(self.agents) < 10:
+                elif performance > 0.7 and len(self.agents) < 10:
                     new_agent = Agent(f"Agent_{len(self.agents)+1}", random.choice(['classification', 'regression', 'clustering']), random.choice(['classification', 'regression', 'clustering']))
                     self.add_agent(new_agent)
 
+            # Update agent specializations
+            for agent in self.agents:
+                best_specialization = agent.get_best_specialization()
+                if best_specialization != agent.specialization:
+                    self.log.append(f"Time {self.current_time}: {agent.agent_id} changed specialization from {agent.specialization} to {best_specialization}")
+                    agent.specialization = best_specialization
+
         return self.evaluate_system_performance()
+
+    def get_log(self):
+        return self.log
