@@ -2,40 +2,19 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
-from sklearn.preprocessing import StandardScaler, OneHotEncoder, PowerTransformer
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
-from sklearn.feature_selection import SelectKBest, f_regression, RFE
-from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
-from sklearn.linear_model import LinearRegression, Ridge, Lasso
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from sklearn.svm import SVR
-from sklearn.neural_network import MLPRegressor
-from xgboost import XGBRegressor
-from lightgbm import LGBMRegressor
-from sklearn.inspection import permutation_importance
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.linear_model import LinearRegression
 
 class AdvancedRiskPredictor:
     def __init__(self):
-        self.models = {
-            'Linear Regression': LinearRegression(),
-            'Ridge': Ridge(),
-            'Lasso': Lasso(),
-            'Random Forest': RandomForestRegressor(n_estimators=100, random_state=42),
-            'Gradient Boosting': GradientBoostingRegressor(n_estimators=100, random_state=42),
-            'SVR': SVR(),
-            'Neural Network': MLPRegressor(hidden_layer_sizes=(100, 50), max_iter=5000, random_state=42),
-            'XGBoost': XGBRegressor(random_state=42),
-            'LightGBM': LGBMRegressor(random_state=42)
-        }
+        self.model = LinearRegression()
         self.preprocessor = None
-        self.feature_selector = SelectKBest(score_func=f_regression, k=10)
-        self.best_model = None
-        self.prompt_length_bins = None
-        self.time_constraint_bins = None
-        self.selected_feature_names = None
+        self.feature_names = None
 
     def load_llm_prompting_data(self):
         np.random.seed(42)
@@ -51,43 +30,25 @@ class AdvancedRiskPredictor:
             'domain_specificity': np.random.uniform(1, 10, n_samples),
             'creativity_required': np.random.uniform(1, 10, n_samples),
             'time_constraint': np.random.randint(1, 60, n_samples),
-            'prompt_effectiveness_score': np.random.uniform(0, 100, n_samples)
+            'accuracy_score': np.random.uniform(0, 100, n_samples),
+            'creativity_score': np.random.uniform(0, 100, n_samples),
+            'relevance_score': np.random.uniform(0, 100, n_samples)
         })
         return data
 
     def engineer_features(self, data):
         data['complexity_clarity_ratio'] = data['prompt_complexity'] / data['instruction_clarity']
         data['time_pressure'] = data['expected_output_length'] / data['time_constraint']
-        data['creativity_domain_interaction'] = data['creativity_required'] * data['domain_specificity']
-        
-        # Log transform for skewed numeric features
-        skewed_features = ['prompt_length', 'expected_output_length', 'time_constraint']
-        for feature in skewed_features:
-            data[f'{feature}_log'] = np.log1p(data[feature])
-        
-        # Binning for numeric features (only if more than one unique value)
-        if data['prompt_length'].nunique() > 1:
-            data['prompt_length_bins'] = pd.qcut(data['prompt_length'], q=4, labels=['short', 'medium', 'long', 'very_long'])
-            self.prompt_length_bins = data['prompt_length_bins'].cat.categories
-        if data['time_constraint'].nunique() > 1:
-            data['time_constraint_bins'] = pd.qcut(data['time_constraint'], q=3, labels=['short', 'medium', 'long'])
-            self.time_constraint_bins = data['time_constraint_bins'].cat.categories
-        
-        # Interaction terms
-        data['length_complexity'] = data['prompt_length'] * data['prompt_complexity']
-        data['difficulty_clarity'] = data['target_task_difficulty'] * data['instruction_clarity']
-        
         return data
 
     def preprocess_data(self, data):
         data = self.engineer_features(data)
         
-        numeric_features = [col for col in data.columns if data[col].dtype in ['int64', 'float64'] and col != 'prompt_effectiveness_score']
+        numeric_features = [col for col in data.columns if data[col].dtype in ['int64', 'float64'] and col not in ['accuracy_score', 'creativity_score', 'relevance_score']]
         categorical_features = [col for col in data.columns if data[col].dtype == 'object' or data[col].dtype.name == 'category']
 
         numeric_transformer = Pipeline(steps=[
             ('imputer', SimpleImputer(strategy='median')),
-            ('power', PowerTransformer(method='yeo-johnson')),
             ('scaler', StandardScaler())
         ])
         categorical_transformer = Pipeline(steps=[
@@ -101,163 +62,59 @@ class AdvancedRiskPredictor:
                 ('cat', categorical_transformer, categorical_features)
             ])
 
-        X = data.drop('prompt_effectiveness_score', axis=1)
-        y = data['prompt_effectiveness_score']
+        X = data.drop(['accuracy_score', 'creativity_score', 'relevance_score'], axis=1)
+        y = data[['accuracy_score', 'creativity_score', 'relevance_score']]
 
         X_preprocessed = self.preprocessor.fit_transform(X)
-        X_selected = self.feature_selector.fit_transform(X_preprocessed, y)
+        self.feature_names = self.preprocessor.get_feature_names_out()
         
-        # Update selected feature names
-        feature_names = self.preprocessor.get_feature_names_out()
-        self.selected_feature_names = feature_names[self.feature_selector.get_support()]
-        
-        return X_selected, y
+        return X_preprocessed, y
 
     def train_and_evaluate(self, data):
         X, y = self.preprocess_data(data)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-        results = {}
-        for name, model in self.models.items():
-            if name == 'Random Forest':
-                param_grid = {
-                    'n_estimators': [50, 100, 200],
-                    'max_depth': [None, 10, 20],
-                    'min_samples_split': [2, 5, 10]
-                }
-                grid_search = GridSearchCV(model, param_grid, cv=5, scoring='neg_mean_squared_error')
-                grid_search.fit(X_train, y_train)
-                model = grid_search.best_estimator_
-                self.models[name] = model
-            else:
-                model.fit(X_train, y_train)
-            
-            y_pred = model.predict(X_test)
-            mse = mean_squared_error(y_test, y_pred)
-            rmse = np.sqrt(mse)
-            mae = mean_absolute_error(y_test, y_pred)
-            r2 = r2_score(y_test, y_pred)
-            cv_scores = cross_val_score(model, X, y, cv=5, scoring='neg_mean_squared_error')
-            
-            results[name] = {
-                'MSE': mse,
-                'RMSE': rmse,
-                'MAE': mae,
-                'R2': r2,
-                'CV_MSE': -cv_scores.mean()
-            }
-
-        self.best_model = min(results, key=lambda x: results[x]['CV_MSE'])
+        self.model.fit(X_train, y_train)
         
-        print("Model Comparison Results:")
-        for name, metrics in results.items():
-            print(f"{name}:")
-            print(f"  MSE: {metrics['MSE']:.4f}")
-            print(f"  RMSE: {metrics['RMSE']:.4f}")
-            print(f"  MAE: {metrics['MAE']:.4f}")
-            print(f"  R2: {metrics['R2']:.4f}")
-            print(f"  Cross-Validation MSE: {metrics['CV_MSE']:.4f}")
+        y_pred = self.model.predict(X_test)
+        mse = mean_squared_error(y_test, y_pred)
+        r2 = r2_score(y_test, y_pred)
         
-        print(f"\nBest Model: {self.best_model}")
-
-        # Visualize model performance
-        self.visualize_model_performance(results)
-
-        # Feature importance for the best model
-        self.visualize_feature_importance(X, y, self.models[self.best_model])
+        print(f"Model Performance:")
+        print(f"MSE: {mse:.4f}")
+        print(f"R2 Score: {r2:.4f}")
+        
+        self.visualize_feature_importance()
 
     def predict_prompt_effectiveness(self, prompt_data):
         prompt_data = self.engineer_features(prompt_data)
-        
-        # Add missing binned columns with a default value
-        if 'prompt_length_bins' not in prompt_data.columns and self.prompt_length_bins is not None:
-            prompt_data['prompt_length_bins'] = self.prompt_length_bins[0]
-        if 'time_constraint_bins' not in prompt_data.columns and self.time_constraint_bins is not None:
-            prompt_data['time_constraint_bins'] = self.time_constraint_bins[0]
-        
         X_preprocessed = self.preprocessor.transform(prompt_data)
-        X_selected = self.feature_selector.transform(X_preprocessed)
-        return self.models[self.best_model].predict(X_selected)
-
-    def visualize_feature_importance(self, X, y, model):
-        if hasattr(model, 'feature_importances_'):
-            importances = model.feature_importances_
-        else:
-            importances = permutation_importance(model, X, y, n_repeats=10, random_state=42).importances_mean
         
-        feature_importance = pd.DataFrame({'feature': self.selected_feature_names, 'importance': importances})
-        feature_importance = feature_importance.sort_values('importance', ascending=False).head(15)
+        predictions = self.model.predict(X_preprocessed)[0]
+        return {
+            'accuracy_score': predictions[0],
+            'creativity_score': predictions[1],
+            'relevance_score': predictions[2],
+            'overall_effectiveness': np.mean(predictions)
+        }
+
+    def visualize_feature_importance(self):
+        importances = np.abs(self.model.coef_).mean(axis=0)
+        feature_importance = pd.DataFrame({'feature': self.feature_names, 'importance': importances})
+        feature_importance = feature_importance.sort_values('importance', ascending=False).head(10)
 
         plt.figure(figsize=(10, 6))
         sns.barplot(x='importance', y='feature', data=feature_importance)
-        plt.title(f'Top 15 Feature Importances for {self.best_model}')
+        plt.title('Top 10 Feature Importances')
         plt.tight_layout()
         plt.savefig('feature_importance.png')
         plt.close()
 
-    def visualize_correlation_matrix(self, data):
-        numeric_data = data.select_dtypes(include=[np.number])
-        correlation_matrix = numeric_data.corr()
-        plt.figure(figsize=(12, 10))
-        sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', vmin=-1, vmax=1, center=0)
-        plt.title('Correlation Matrix of Numeric Features')
-        plt.tight_layout()
-        plt.savefig('correlation_matrix.png')
-        plt.close()
-
-    def visualize_model_performance(self, results):
-        model_names = list(results.keys())
-        mse_scores = [results[name]['MSE'] for name in model_names]
-        r2_scores = [results[name]['R2'] for name in model_names]
-
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
-        sns.barplot(x=model_names, y=mse_scores, ax=ax1)
-        ax1.set_title('MSE Scores by Model')
-        ax1.set_ylabel('MSE')
-        ax1.set_xticklabels(ax1.get_xticklabels(), rotation=45, ha='right')
-
-        sns.barplot(x=model_names, y=r2_scores, ax=ax2)
-        ax2.set_title('R2 Scores by Model')
-        ax2.set_ylabel('R2')
-        ax2.set_xticklabels(ax2.get_xticklabels(), rotation=45, ha='right')
-
-        plt.tight_layout()
-        plt.savefig('model_performance_comparison.png')
-        plt.close()
-
-    def visualize_residuals(self, X_test, y_test):
-        y_pred = self.models[self.best_model].predict(X_test)
-        residuals = y_test - y_pred
-
-        plt.figure(figsize=(10, 6))
-        sns.scatterplot(x=y_pred, y=residuals)
-        plt.axhline(y=0, color='r', linestyle='--')
-        plt.title('Residual Plot')
-        plt.xlabel('Predicted Values')
-        plt.ylabel('Residuals')
-        plt.tight_layout()
-        plt.savefig('residual_plot.png')
-        plt.close()
-
-# Example usage
 if __name__ == "__main__":
     risk_predictor = AdvancedRiskPredictor()
-    
-    # Load and preprocess data
     data = risk_predictor.load_llm_prompting_data()
-    
-    # Visualize correlation matrix
-    risk_predictor.visualize_correlation_matrix(data)
-
-    # Train and evaluate models
     risk_predictor.train_and_evaluate(data)
 
-    # Visualize residuals
-    X, y = risk_predictor.preprocess_data(data)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    risk_predictor.visualize_residuals(X_test, y_test)
-
-    # Example prediction
     new_prompt = pd.DataFrame({
         'prompt_length': [250],
         'prompt_complexity': [7],
@@ -272,9 +129,6 @@ if __name__ == "__main__":
     })
 
     predicted_effectiveness = risk_predictor.predict_prompt_effectiveness(new_prompt)
-    print(f"\nPredicted prompt effectiveness score: {predicted_effectiveness[0]:.2f}")
-
-    print("\nMost important features:")
-    top_features = sorted(zip(risk_predictor.selected_feature_names, risk_predictor.feature_selector.scores_), key=lambda x: x[1], reverse=True)[:5]
-    for name, importance in top_features:
-        print(f"{name}: {importance:.2f}")
+    print("\nPredicted prompt effectiveness scores:")
+    for key, value in predicted_effectiveness.items():
+        print(f"{key}: {value:.2f}")
