@@ -63,6 +63,8 @@ def generate_response(message):
 def handle_messages():
     logging.debug(f"Handling {request.method} request to /api/messages")
     if request.method == 'POST':
+        logging.debug(f"POST request data: {request.form}")
+        logging.debug(f"POST request files: {request.files}")
         message = request.form.get('message')
         file = request.files.get('file')
         

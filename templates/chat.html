@@ -58,6 +58,12 @@
             max-width: 200px;
             max-height: 200px;
         }
+        #debug-output {
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #f9f9f9;
+        }
     </style>
 </head>
 <body>
@@ -124,11 +130,15 @@
             if (fileInput.files.length > 0) {
                 formData.append('file', fileInput.files[0]);
             }
+            debug('FormData: ' + JSON.stringify(Object.fromEntries(formData)));
             fetch('/api/messages', {
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
+            .then(response => {
+                debug('Response status: ' + response.status);
+                return response.json();
+            })
             .then(data => {
                 debug('Message sent, response: ' + JSON.stringify(data));
                 if (data.status === 'success') {
