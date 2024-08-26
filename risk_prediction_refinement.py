@@ -3,61 +3,67 @@ import numpy as np
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.neural_network import MLPRegressor
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.feature_selection import SelectKBest, f_regression
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
 
 class AdvancedRiskPredictor:
     def __init__(self):
         self.models = {
             'RandomForest': RandomForestRegressor(n_estimators=100, random_state=42),
             'GradientBoosting': GradientBoostingRegressor(n_estimators=100, random_state=42),
-            'NeuralNetwork': MLPRegressor(hidden_layer_sizes=(100, 50), max_iter=1000, random_state=42)
+            'NeuralNetwork': MLPRegressor(hidden_layer_sizes=(100, 50), max_iter=2000, random_state=42)
         }
-        self.scaler = StandardScaler()
+        self.preprocessor = None
         self.feature_selector = SelectKBest(score_func=f_regression, k=10)
         self.best_model = None
 
-    def load_real_data(self, filepath):
-        # In a real scenario, this function would load data from a CSV or database
-        # For demonstration, we'll create a more realistic synthetic dataset
+    def load_llm_prompting_data(self):
         np.random.seed(42)
         n_samples = 1000
         data = pd.DataFrame({
-            'team_size': np.random.randint(5, 50, n_samples),
-            'project_duration': np.random.randint(30, 365, n_samples),
-            'project_complexity': np.random.uniform(1, 10, n_samples),
-            'timeline_pressure': np.random.uniform(1, 10, n_samples),
-            'budget_constraints': np.random.uniform(1, 10, n_samples),
-            'team_experience': np.random.uniform(1, 10, n_samples),
-            'technology_familiarity': np.random.uniform(1, 10, n_samples),
-            'external_dependencies': np.random.randint(0, 5, n_samples),
-            'stakeholder_involvement': np.random.uniform(1, 10, n_samples),
-            'requirements_clarity': np.random.uniform(1, 10, n_samples),
-            'past_project_success_rate': np.random.uniform(0, 1, n_samples),
-            'risk_score': np.random.uniform(0, 100, n_samples)
+            'prompt_length': np.random.randint(10, 500, n_samples),
+            'prompt_complexity': np.random.uniform(1, 10, n_samples),
+            'target_task_difficulty': np.random.uniform(1, 10, n_samples),
+            'model_size': np.random.choice(['small', 'medium', 'large'], n_samples),
+            'context_relevance': np.random.uniform(0, 1, n_samples),
+            'instruction_clarity': np.random.uniform(1, 10, n_samples),
+            'expected_output_length': np.random.randint(50, 1000, n_samples),
+            'domain_specificity': np.random.uniform(1, 10, n_samples),
+            'creativity_required': np.random.uniform(1, 10, n_samples),
+            'time_constraint': np.random.randint(1, 60, n_samples),
+            'prompt_effectiveness_score': np.random.uniform(0, 100, n_samples)
         })
         return data
 
     def engineer_features(self, data):
-        # Create new features
-        data['complexity_experience_ratio'] = data['project_complexity'] / data['team_experience']
-        data['pressure_duration_ratio'] = data['timeline_pressure'] / data['project_duration']
-        data['budget_per_team_member'] = data['budget_constraints'] / data['team_size']
-        data['technology_gap'] = 10 - data['technology_familiarity']
-        data['stakeholder_req_clarity'] = data['stakeholder_involvement'] * data['requirements_clarity']
-        
+        data['complexity_clarity_ratio'] = data['prompt_complexity'] / data['instruction_clarity']
+        data['time_pressure'] = data['expected_output_length'] / data['time_constraint']
+        data['creativity_domain_interaction'] = data['creativity_required'] * data['domain_specificity']
         return data
 
     def preprocess_data(self, data):
         data = self.engineer_features(data)
         
-        features = [col for col in data.columns if col != 'risk_score']
-        X = data[features]
-        y = data['risk_score']
+        numeric_features = [col for col in data.columns if col not in ['model_size', 'prompt_effectiveness_score']]
+        categorical_features = ['model_size']
 
-        X_scaled = self.scaler.fit_transform(X)
-        X_selected = self.feature_selector.fit_transform(X_scaled, y)
+        numeric_transformer = StandardScaler()
+        categorical_transformer = OneHotEncoder(drop='first')
+
+        self.preprocessor = ColumnTransformer(
+            transformers=[
+                ('num', numeric_transformer, numeric_features),
+                ('cat', categorical_transformer, categorical_features)
+            ])
+
+        X = data.drop('prompt_effectiveness_score', axis=1)
+        y = data['prompt_effectiveness_score']
+
+        X_preprocessed = self.preprocessor.fit_transform(X)
+        X_selected = self.feature_selector.fit_transform(X_preprocessed, y)
         
         return X_selected, y
 
@@ -86,10 +92,10 @@ class AdvancedRiskPredictor:
         
         print(f"\nBest Model: {self.best_model}")
 
-    def predict_risk(self, project_data):
-        project_data = self.engineer_features(project_data)
-        X = self.scaler.transform(project_data)
-        X_selected = self.feature_selector.transform(X)
+    def predict_prompt_effectiveness(self, prompt_data):
+        prompt_data = self.engineer_features(prompt_data)
+        X_preprocessed = self.preprocessor.transform(prompt_data)
+        X_selected = self.feature_selector.transform(X_preprocessed)
         return self.models[self.best_model].predict(X_selected)
 
 # Example usage
@@ -97,31 +103,30 @@ if __name__ == "__main__":
     risk_predictor = AdvancedRiskPredictor()
     
     # Load and preprocess data
-    data = risk_predictor.load_real_data("dummy_path")  # In real scenario, provide actual file path
+    data = risk_predictor.load_llm_prompting_data()
     
     # Train and evaluate models
     risk_predictor.train_and_evaluate(data)
 
     # Example prediction
-    new_project = pd.DataFrame({
-        'team_size': [20],
-        'project_duration': [180],
-        'project_complexity': [7.5],
-        'timeline_pressure': [8],
-        'budget_constraints': [6],
-        'team_experience': [7],
-        'technology_familiarity': [6.5],
-        'external_dependencies': [2],
-        'stakeholder_involvement': [8],
-        'requirements_clarity': [7],
-        'past_project_success_rate': [0.8]
+    new_prompt = pd.DataFrame({
+        'prompt_length': [250],
+        'prompt_complexity': [7],
+        'target_task_difficulty': [8],
+        'model_size': ['large'],
+        'context_relevance': [0.9],
+        'instruction_clarity': [9],
+        'expected_output_length': [500],
+        'domain_specificity': [6],
+        'creativity_required': [8],
+        'time_constraint': [30]
     })
 
-    predicted_risk = risk_predictor.predict_risk(new_project)
-    print(f"\nPredicted risk for the new project: {predicted_risk[0]:.2f}")
+    predicted_effectiveness = risk_predictor.predict_prompt_effectiveness(new_prompt)
+    print(f"\nPredicted prompt effectiveness score: {predicted_effectiveness[0]:.2f}")
     
     print("\nMost important features:")
-    feature_names = risk_predictor.engineer_features(data.drop('risk_score', axis=1)).columns
+    feature_names = risk_predictor.preprocessor.get_feature_names_out()
     feature_importances = risk_predictor.feature_selector.scores_
     top_features = sorted(zip(feature_names, feature_importances), key=lambda x: x[1], reverse=True)[:5]
     for name, importance in top_features:
