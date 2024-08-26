@@ -4,236 +4,85 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AgentZero HR Analytics</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
-        .container { display: flex; flex-wrap: wrap; justify-content: space-between; }
-        .form-container { width: 45%; min-width: 300px; margin-bottom: 20px; }
-        h1, h2 { color: #333; }
-        form { background: #f4f4f4; padding: 20px; border-radius: 5px; }
-        label { display: block; margin-top: 10px; }
-        input, select { width: 100%; padding: 5px; margin-top: 5px; }
-        button { background: #007bff; color: white; padding: 10px 15px; border: none; cursor: pointer; margin-top: 10px; }
-        #results { margin-top: 20px; }
-        .error { color: red; margin-top: 10px; }
-        .chart-container { width: 100%; max-width: 600px; margin: 20px auto; }
-        .user-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .logout-btn { background: #dc3545; }
-        .success { color: green; }
-    </style>
 </head>
 <body>
-    <div class="user-info">
-        <h1>AgentZero HR Analytics</h1>
-        <div>
-            <span>Welcome, {{ user.username }}!</span>
-            <a href="{{ url_for('dashboard') }}"><button>Dashboard</button></a>
-            {% if user.is_admin %}
-            <a href="{{ url_for('admin_panel') }}"><button>Admin Panel</button></a>
-            {% endif %}
-            <a href="{{ url_for('logout') }}"><button class="logout-btn">Logout</button></a>
-        </div>
-    </div>
-    
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <p class="{{ category }}">{{ message }}</p>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
     <div class="container">
-        <div class="form-container">
-            <h2>Predict Employee Performance</h2>
-            <form id="performance-form">
-                <label for="age">Age:</label>
-                <input type="number" id="age" required>
-                
-                <label for="years_at_company">Years at Company:</label>
-                <input type="number" id="years_at_company" required>
-                
-                <label for="years_in_current_role">Years in Current Role:</label>
-                <input type="number" id="years_in_current_role" required>
-                
-                <label for="job_satisfaction">Job Satisfaction (1-5):</label>
-                <input type="number" id="job_satisfaction" min="1" max="5" required>
-                
-                <label for="job_involvement">Job Involvement (1-5):</label>
-                <input type="number" id="job_involvement" min="1" max="5" required>
-                
-                <label for="relationship_satisfaction">Relationship Satisfaction (1-5):</label>
-                <input type="number" id="relationship_satisfaction" min="1" max="5" required>
-                
-                <label for="work_life_balance">Work Life Balance (1-5):</label>
-                <input type="number" id="work_life_balance" min="1" max="5" required>
-                
-                <button type="submit">Predict Performance</button>
-            </form>
-            <div id="performance-result"></div>
-            <div id="performance-error" class="error"></div>
-            <div class="chart-container">
-                <canvas id="performance-chart"></canvas>
+        <div class="dashboard-header">
+            <h1>AgentZero HR Analytics</h1>
+            <div>
+                <span>Welcome, {{ user.username }}!</span>
+                <a href="{{ url_for('dashboard') }}"><button>Dashboard</button></a>
+                {% if user.is_admin %}
+                <a href="{{ url_for('admin_panel') }}"><button>Admin Panel</button></a>
+                {% endif %}
+                <a href="{{ url_for('logout') }}"><button class="logout-btn">Logout</button></a>
             </div>
         </div>
         
-        <div class="form-container">
-            <h2>Form Optimal Team</h2>
-            <form id="team-form">
-                <label for="team_size">Team Size:</label>
-                <input type="number" id="team_size" required>
-                
-                <label for="required_skills">Required Skills (comma-separated):</label>
-                <input type="text" id="required_skills" required>
-                
-                <button type="submit">Form Team</button>
-            </form>
-            <div id="team-result"></div>
-            <div id="team-error" class="error"></div>
-            <div class="chart-container">
-                <canvas id="team-chart"></canvas>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <p class="{{ category }}">{{ message }}</p>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="dashboard-grid">
+            <div class="dashboard-card">
+                <h2>Predict Employee Performance</h2>
+                <form id="performance-form">
+                    <label for="age">Age:</label>
+                    <input type="number" id="age" required>
+                    
+                    <label for="years_at_company">Years at Company:</label>
+                    <input type="number" id="years_at_company" required>
+                    
+                    <label for="years_in_current_role">Years in Current Role:</label>
+                    <input type="number" id="years_in_current_role" required>
+                    
+                    <label for="job_satisfaction">Job Satisfaction (1-5):</label>
+                    <input type="number" id="job_satisfaction" min="1" max="5" required>
+                    
+                    <label for="job_involvement">Job Involvement (1-5):</label>
+                    <input type="number" id="job_involvement" min="1" max="5" required>
+                    
+                    <label for="relationship_satisfaction">Relationship Satisfaction (1-5):</label>
+                    <input type="number" id="relationship_satisfaction" min="1" max="5" required>
+                    
+                    <label for="work_life_balance">Work Life Balance (1-5):</label>
+                    <input type="number" id="work_life_balance" min="1" max="5" required>
+                    
+                    <button type="submit">Predict Performance</button>
+                </form>
+                <div id="performance-result"></div>
+                <div id="performance-error" class="error"></div>
+                <div class="chart-container">
+                    <canvas id="performance-chart"></canvas>
+                </div>
+            </div>
+            
+            <div class="dashboard-card">
+                <h2>Form Optimal Team</h2>
+                <form id="team-form">
+                    <label for="team_size">Team Size:</label>
+                    <input type="number" id="team_size" required>
+                    
+                    <label for="required_skills">Required Skills (comma-separated):</label>
+                    <input type="text" id="required_skills" required>
+                    
+                    <button type="submit">Form Team</button>
+                </form>
+                <div id="team-result"></div>
+                <div id="team-error" class="error"></div>
+                <div class="chart-container">
+                    <canvas id="team-chart"></canvas>
+                </div>
             </div>
         </div>
     </div>
 
-    <script>
-        let performanceChart, teamChart;
-
-        document.getElementById('performance-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = {
-                age: parseInt(document.getElementById('age').value),
-                years_at_company: parseInt(document.getElementById('years_at_company').value),
-                years_in_current_role: parseInt(document.getElementById('years_in_current_role').value),
-                job_satisfaction: parseInt(document.getElementById('job_satisfaction').value),
-                job_involvement: parseInt(document.getElementById('job_involvement').value),
-                relationship_satisfaction: parseInt(document.getElementById('relationship_satisfaction').value),
-                work_life_balance: parseInt(document.getElementById('work_life_balance').value)
-            };
-            
-            fetch('/predict_performance', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(formData),
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    document.getElementById('performance-error').textContent = data.error;
-                    document.getElementById('performance-result').innerHTML = '';
-                } else {
-                    document.getElementById('performance-error').textContent = '';
-                    document.getElementById('performance-result').innerHTML = `
-                        <h3>Predicted Performance: ${data.predicted_performance.toFixed(2)}</h3>
-                    `;
-                    updatePerformanceChart(data.predicted_performance);
-                }
-            })
-            .catch(error => {
-                document.getElementById('performance-error').textContent = 'An error occurred. Please try again.';
-            });
-        });
-
-        document.getElementById('team-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = {
-                team_size: parseInt(document.getElementById('team_size').value),
-                required_skills: document.getElementById('required_skills').value.split(',').map(skill => skill.trim())
-            };
-            
-            fetch('/form_team', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(formData),
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    document.getElementById('team-error').textContent = data.error;
-                    document.getElementById('team-result').innerHTML = '';
-                } else {
-                    document.getElementById('team-error').textContent = '';
-                    let teamHtml = '<h3>Optimal Team:</h3>';
-                    data.optimal_team.forEach((member, index) => {
-                        teamHtml += `
-                            <h4>Member ${index + 1}</h4>
-                            <p>Age: ${member.age}</p>
-                            <p>Department: ${member.department}</p>
-                            <p>Job Role: ${member.job_role}</p>
-                            <p>Performance Score: ${member.performance_score.toFixed(2)}</p>
-                            <p>Job Satisfaction: ${member.job_satisfaction}</p>
-                            <p>Years at Company: ${member.years_at_company}</p>
-                            <hr>
-                        `;
-                    });
-                    document.getElementById('team-result').innerHTML = teamHtml;
-                    updateTeamChart(data.optimal_team);
-                }
-            })
-            .catch(error => {
-                document.getElementById('team-error').textContent = 'An error occurred. Please try again.';
-            });
-        });
-
-        function updatePerformanceChart(performance) {
-            const ctx = document.getElementById('performance-chart').getContext('2d');
-            if (performanceChart) {
-                performanceChart.destroy();
-            }
-            performanceChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: ['Predicted Performance'],
-                    datasets: [{
-                        label: 'Performance Score',
-                        data: [performance],
-                        backgroundColor: 'rgba(75, 192, 192, 0.6)',
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            max: 5
-                        }
-                    }
-                }
-            });
-        }
-
-        function updateTeamChart(team) {
-            const ctx = document.getElementById('team-chart').getContext('2d');
-            if (teamChart) {
-                teamChart.destroy();
-            }
-            teamChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: team.map((_, index) => `Member ${index + 1}`),
-                    datasets: [{
-                        label: 'Performance Score',
-                        data: team.map(member => member.performance_score),
-                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            max: 5
-                        }
-                    }
-                }
-            });
-        }
-    </script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
