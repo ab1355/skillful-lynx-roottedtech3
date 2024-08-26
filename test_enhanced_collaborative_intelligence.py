@@ -1,16 +1,16 @@
 import asyncio
 from collaborative_intelligence import Agent, MultiAgentSystem
-from models import SimpleNNModel
 from task import Task
+import numpy as np
 
 async def test_enhanced_collaborative_intelligence():
     print("Testing Enhanced Collaborative Intelligence Framework")
 
     # Create specialized agents
     agents = [
-        Agent("Agent_1", SimpleNNModel(10, 5, 1), "classification"),
-        Agent("Agent_2", SimpleNNModel(10, 5, 1), "regression"),
-        Agent("Agent_3", SimpleNNModel(10, 5, 1), "clustering")
+        Agent("Agent_1", "classification", "classification"),
+        Agent("Agent_2", "regression", "regression"),
+        Agent("Agent_3", "clustering", "clustering")
     ]
     mas = MultiAgentSystem(agents)
 
@@ -31,9 +31,20 @@ async def test_enhanced_collaborative_intelligence():
     for agent in agents:
         print(f"{agent.agent_id} reputation: {agent.reputation}")
 
-    print("\n2. Federated Learning:")
+    print("\n2. Federated Learning with Privacy:")
+    # Simulate local training data
+    for agent in agents:
+        X = np.random.rand(100, 10)
+        if agent.specialization == "classification":
+            y = np.random.randint(0, 2, 100)  # Binary classification
+        elif agent.specialization == "regression":
+            y = np.random.rand(100)  # Continuous values for regression
+        else:  # Clustering
+            y = None  # Clustering doesn't need labels
+        agent.train_on_local_data(X, y)
+
     mas.federated_learning_round()
-    print("Federated learning round completed")
+    print("Federated learning round completed with privacy-preserving aggregation")
 
     print("\n3. Collaborative Knowledge Exchange:")
     # Add some knowledge to agents
@@ -47,9 +58,17 @@ async def test_enhanced_collaborative_intelligence():
     for agent in agents:
         print(f"{agent.agent_id} knowledge: {agent.knowledge_base}")
 
-    print("\n4. Information Request:")
-    result = await agents[2].request_information("important_data", mas)
-    print(f"Agent_3 requested 'important_data': {result}")
+    print("\n4. System Simulation:")
+    num_steps = 10  # Reduce the number of simulation steps
+    for step in range(num_steps):
+        print(f"Simulation step {step + 1}/{num_steps}")
+        await mas.process_all_tasks()
+        mas.federated_learning_round()
+        await mas.collaborative_exchange()
+
+    final_performance = mas.evaluate_system_performance()
+    print(f"Final system performance: {final_performance}")
+    print(f"Final number of agents: {len(mas.agents)}")
 
     print("\nEnhanced Collaborative Intelligence test completed successfully!")
 
