@@ -41,12 +41,14 @@ def chat():
     logging.debug("Accessing chat route")
     return render_template('chat.html')
 
+def generate_response(message):
+    # Simple response generation
+    return f"Thank you for your message about '{message}'. I'm processing your request."
+
 @app.route('/api/messages', methods=['GET', 'POST'])
 def handle_messages():
     logging.debug(f"Handling {request.method} request to /api/messages")
     if request.method == 'POST':
-        logging.debug(f"POST request data: {request.form}")
-        logging.debug(f"POST request files: {request.files}")
         message = request.form.get('message')
         file = request.files.get('file')
         
@@ -58,9 +60,13 @@ def handle_messages():
             filename = secure_filename(file.filename)
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
-            chat_messages.append({'text': message, 'file': filename})
+            chat_messages.append({'text': message, 'file': filename, 'sender': 'user'})
         else:
-            chat_messages.append({'text': message})
+            chat_messages.append({'text': message, 'sender': 'user'})
+        
+        # Generate and add response
+        response = generate_response(message)
+        chat_messages.append({'text': response, 'sender': 'bot'})
         
         logging.debug(f"Current chat messages: {chat_messages}")
         return jsonify({'status': 'success'})

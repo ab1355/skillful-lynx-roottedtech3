@@ -44,8 +44,15 @@
         .message {
             margin-bottom: 10px;
             padding: 10px;
-            background-color: #f1f1f1;
             border-radius: 5px;
+        }
+        .message.user {
+            background-color: #f1f1f1;
+            text-align: right;
+        }
+        .message.bot {
+            background-color: #e1f5fe;
+            text-align: left;
         }
         .message img {
             max-width: 200px;
@@ -84,7 +91,7 @@
                     chatContainer.innerHTML = '';
                     messages.forEach(message => {
                         const messageElement = document.createElement('div');
-                        messageElement.className = 'message';
+                        messageElement.className = `message ${message.sender}`;
                         messageElement.textContent = message.text;
                         if (message.file) {
                             const fileElement = document.createElement('div');
