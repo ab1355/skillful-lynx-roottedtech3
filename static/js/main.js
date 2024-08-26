@@ -1,7 +1,56 @@
 let performanceChart, teamChart;
 
-document.getElementById('performance-form').addEventListener('submit', function(e) {
+document.addEventListener('DOMContentLoaded', function() {
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    darkModeToggle.addEventListener('click', toggleDarkMode);
+
+    const performanceForm = document.getElementById('performance-form');
+    const teamForm = document.getElementById('team-form');
+
+    performanceForm.addEventListener('submit', handlePerformanceFormSubmit);
+    teamForm.addEventListener('submit', handleTeamFormSubmit);
+
+    // Client-side form validation
+    performanceForm.querySelectorAll('input').forEach(input => {
+        input.addEventListener('input', validateInput);
+    });
+
+    teamForm.querySelectorAll('input').forEach(input => {
+        input.addEventListener('input', validateInput);
+    });
+});
+
+function toggleDarkMode() {
+    document.body.classList.toggle('dark-mode');
+    localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+}
+
+function validateInput(event) {
+    const input = event.target;
+    const errorElement = input.nextElementSibling;
+    
+    if (input.validity.valid) {
+        if (errorElement && errorElement.classList.contains('error-message')) {
+            errorElement.remove();
+        }
+    } else {
+        if (!errorElement || !errorElement.classList.contains('error-message')) {
+            const errorMessage = document.createElement('div');
+            errorMessage.className = 'error-message';
+            errorMessage.textContent = input.validationMessage;
+            input.parentNode.insertBefore(errorMessage, input.nextSibling);
+        }
+    }
+}
+
+function handlePerformanceFormSubmit(e) {
     e.preventDefault();
+    const form = e.target;
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
     const formData = {
         age: parseInt(document.getElementById('age').value),
         years_at_company: parseInt(document.getElementById('years_at_company').value),
@@ -12,6 +61,9 @@ document.getElementById('performance-form').addEventListener('submit', function(
         work_life_balance: parseInt(document.getElementById('work_life_balance').value)
     };
     
+    const spinner = document.getElementById('performance-spinner');
+    spinner.style.display = 'block';
+
     fetch('/predict_performance', {
         method: 'POST',
         headers: {
@@ -21,6 +73,7 @@ document.getElementById('performance-form').addEventListener('submit', function(
     })
     .then(response => response.json())
     .then(data => {
+        spinner.style.display = 'none';
         if (data.error) {
             document.getElementById('performance-error').textContent = data.error;
             document.getElementById('performance-result').innerHTML = '';
@@ -33,17 +86,27 @@ document.getElementById('performance-form').addEventListener('submit', function(
         }
     })
     .catch(error => {
+        spinner.style.display = 'none';
         document.getElementById('performance-error').textContent = 'An error occurred. Please try again.';
     });
-});
+}
 
-document.getElementById('team-form').addEventListener('submit', function(e) {
+function handleTeamFormSubmit(e) {
     e.preventDefault();
+    const form = e.target;
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
     const formData = {
         team_size: parseInt(document.getElementById('team_size').value),
         required_skills: document.getElementById('required_skills').value.split(',').map(skill => skill.trim())
     };
     
+    const spinner = document.getElementById('team-spinner');
+    spinner.style.display = 'block';
+
     fetch('/form_team', {
         method: 'POST',
         headers: {
@@ -53,6 +116,7 @@ document.getElementById('team-form').addEventListener('submit', function(e) {
     })
     .then(response => response.json())
     .then(data => {
+        spinner.style.display = 'none';
         if (data.error) {
             document.getElementById('team-error').textContent = data.error;
             document.getElementById('team-result').innerHTML = '';
@@ -76,9 +140,10 @@ document.getElementById('team-form').addEventListener('submit', function(e) {
         }
     })
     .catch(error => {
+        spinner.style.display = 'none';
         document.getElementById('team-error').textContent = 'An error occurred. Please try again.';
     });
-});
+}
 
 function updatePerformanceChart(performance) {
     const ctx = document.getElementById('performance-chart').getContext('2d');
@@ -98,6 +163,7 @@ function updatePerformanceChart(performance) {
             }]
         },
         options: {
+            responsive: true,
             scales: {
                 y: {
                     beginAtZero: true,
@@ -126,6 +192,7 @@ function updateTeamChart(team) {
             }]
         },
         options: {
+            responsive: true,
             scales: {
                 y: {
                     beginAtZero: true,
@@ -134,4 +201,9 @@ function updateTeamChart(team) {
             }
         }
     });
+}
+
+// Check for saved dark mode preference
+if (localStorage.getItem('darkMode') === 'true') {
+    document.body.classList.add('dark-mode');
 }
