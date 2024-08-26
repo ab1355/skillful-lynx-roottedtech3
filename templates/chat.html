@@ -61,17 +61,26 @@
         <input type="file" id="file-input">
         <button type="submit">Send</button>
     </form>
+    <div id="debug-output"></div>
 
     <script>
         const chatContainer = document.getElementById('chat-container');
         const messageForm = document.getElementById('message-form');
         const messageInput = document.getElementById('message-input');
         const fileInput = document.getElementById('file-input');
+        const debugOutput = document.getElementById('debug-output');
+
+        function debug(message) {
+            console.log(message);
+            debugOutput.innerHTML += message + '<br>';
+        }
 
         function loadMessages() {
+            debug('Fetching messages...');
             fetch('/api/messages')
                 .then(response => response.json())
                 .then(messages => {
+                    debug('Messages received: ' + JSON.stringify(messages));
                     chatContainer.innerHTML = '';
                     messages.forEach(message => {
                         const messageElement = document.createElement('div');
@@ -94,11 +103,15 @@
                         chatContainer.appendChild(messageElement);
                     });
                     chatContainer.scrollTop = chatContainer.scrollHeight;
+                })
+                .catch(error => {
+                    debug('Error fetching messages: ' + error);
                 });
         }
 
         messageForm.addEventListener('submit', (e) => {
             e.preventDefault();
+            debug('Sending message...');
             const formData = new FormData();
             formData.append('message', messageInput.value);
             if (fileInput.files.length > 0) {
@@ -110,11 +123,15 @@
             })
             .then(response => response.json())
             .then(data => {
+                debug('Message sent, response: ' + JSON.stringify(data));
                 if (data.status === 'success') {
                     messageInput.value = '';
                     fileInput.value = '';
                     loadMessages();
                 }
+            })
+            .catch(error => {
+                debug('Error sending message: ' + error);
             });
         });
 
