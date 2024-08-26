@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Help & FAQ - AgentZero HR Analytics</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/additional-styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Help & FAQ</h1>
+        <div class="faq-section">
+            <h2>Frequently Asked Questions</h2>
+            <div class="faq-item">
+                <h3>How do I predict employee performance?</h3>
+                <p>To predict employee performance, fill out the form in the "Predict Employee Performance" section on the main dashboard. Enter the required information such as age, years at company, job satisfaction, etc., and click the "Predict Performance" button.</p>
+            </div>
+            <div class="faq-item">
+                <h3>How does the team formation feature work?</h3>
+                <p>The team formation feature helps you create an optimal team based on the required skills and team size. Enter the desired team size and list the required skills (comma-separated) in the "Form Optimal Team" section, then click the "Form Team" button.</p>
+            </div>
+            <div class="faq-item">
+                <h3>How can I change the chart type?</h3>
+                <p>You can change the chart type by selecting your preferred type from the dropdown menu labeled "Chart Type" above the charts. Your selection will be saved and applied to all charts.</p>
+            </div>
+            <div class="faq-item">
+                <h3>How do I enable or disable notifications?</h3>
+                <p>You can toggle notifications on or off in the user settings panel. Click on the "User Settings" button in the navigation bar and look for the "Enable Notifications" option.</p>
+            </div>
+        </div>
+        <div class="help-section">
+            <h2>Need More Help?</h2>
+            <p>If you need further assistance, please contact our support team at support@agentzero.com or call us at +1 (555) 123-4567.</p>
+        </div>
+        <a href="{{ url_for('index') }}">Back to Dashboard</a>
+    </div>
+</body>
+</html>

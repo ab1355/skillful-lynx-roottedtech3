@@ -6,6 +6,7 @@
     <title>AgentZero HR Analytics</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/additional-styles.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -20,6 +21,7 @@
                 <a href="{{ url_for('admin_panel') }}"><button>Admin Panel</button></a>
                 {% endif %}
                 <a href="{{ url_for('logout') }}"><button class="logout-btn">Logout</button></a>
+                <a href="{{ url_for('help') }}"><button>Help</button></a>
             </div>
         </div>
         
@@ -31,8 +33,24 @@
             {% endif %}
         {% endwith %}
 
+        <div class="user-settings">
+            <label for="chartTypeSelector">Chart Type:</label>
+            <select id="chartTypeSelector">
+                <option value="bar">Bar</option>
+                <option value="line">Line</option>
+                <option value="radar">Radar</option>
+            </select>
+
+            <label for="dataFilter">Filter Data:</label>
+            <select id="dataFilter">
+                <option value="all">All</option>
+                <option value="department">By Department</option>
+                <option value="age">By Age Group</option>
+            </select>
+        </div>
+
         <div class="dashboard-grid">
-            <div class="dashboard-card">
+            <div class="dashboard-card" id="performance-card">
                 <h2>Predict Employee Performance</h2>
                 <form id="performance-form">
                     <label for="age">Age:</label>
@@ -66,7 +84,7 @@
                 </div>
             </div>
             
-            <div class="dashboard-card">
+            <div class="dashboard-card" id="team-card">
                 <h2>Form Optimal Team</h2>
                 <form id="team-form">
                     <label for="team_size">Team Size:</label>
@@ -88,5 +106,18 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/user-settings.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/static/js/service-worker.js').then(function(registration) {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                }, function(err) {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
+    </script>
 </body>
 </html>

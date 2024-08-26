@@ -18,145 +18,32 @@ document.addEventListener('DOMContentLoaded', function() {
     teamForm.querySelectorAll('input').forEach(input => {
         input.addEventListener('input', validateInput);
     });
+
+    // Initialize charts
+    initializeCharts();
+
+    // Add event listeners for chart type selection
+    document.getElementById('chartTypeSelector').addEventListener('change', function(e) {
+        updateChartType(e.target.value);
+    });
+
+    // Add event listeners for data filtering
+    document.getElementById('dataFilter').addEventListener('change', function(e) {
+        filterChartData(e.target.value);
+    });
 });
 
-function toggleDarkMode() {
-    document.body.classList.toggle('dark-mode');
-    localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
-}
+function initializeCharts() {
+    const performanceCtx = document.getElementById('performance-chart').getContext('2d');
+    const teamCtx = document.getElementById('team-chart').getContext('2d');
 
-function validateInput(event) {
-    const input = event.target;
-    const errorElement = input.nextElementSibling;
-    
-    if (input.validity.valid) {
-        if (errorElement && errorElement.classList.contains('error-message')) {
-            errorElement.remove();
-        }
-    } else {
-        if (!errorElement || !errorElement.classList.contains('error-message')) {
-            const errorMessage = document.createElement('div');
-            errorMessage.className = 'error-message';
-            errorMessage.textContent = input.validationMessage;
-            input.parentNode.insertBefore(errorMessage, input.nextSibling);
-        }
-    }
-}
-
-function handlePerformanceFormSubmit(e) {
-    e.preventDefault();
-    const form = e.target;
-    if (!form.checkValidity()) {
-        form.reportValidity();
-        return;
-    }
-
-    const formData = {
-        age: parseInt(document.getElementById('age').value),
-        years_at_company: parseInt(document.getElementById('years_at_company').value),
-        years_in_current_role: parseInt(document.getElementById('years_in_current_role').value),
-        job_satisfaction: parseInt(document.getElementById('job_satisfaction').value),
-        job_involvement: parseInt(document.getElementById('job_involvement').value),
-        relationship_satisfaction: parseInt(document.getElementById('relationship_satisfaction').value),
-        work_life_balance: parseInt(document.getElementById('work_life_balance').value)
-    };
-    
-    const spinner = document.getElementById('performance-spinner');
-    spinner.style.display = 'block';
-
-    fetch('/predict_performance', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-    })
-    .then(response => response.json())
-    .then(data => {
-        spinner.style.display = 'none';
-        if (data.error) {
-            document.getElementById('performance-error').textContent = data.error;
-            document.getElementById('performance-result').innerHTML = '';
-        } else {
-            document.getElementById('performance-error').textContent = '';
-            document.getElementById('performance-result').innerHTML = `
-                <h3>Predicted Performance: ${data.predicted_performance.toFixed(2)}</h3>
-            `;
-            updatePerformanceChart(data.predicted_performance);
-        }
-    })
-    .catch(error => {
-        spinner.style.display = 'none';
-        document.getElementById('performance-error').textContent = 'An error occurred. Please try again.';
-    });
-}
-
-function handleTeamFormSubmit(e) {
-    e.preventDefault();
-    const form = e.target;
-    if (!form.checkValidity()) {
-        form.reportValidity();
-        return;
-    }
-
-    const formData = {
-        team_size: parseInt(document.getElementById('team_size').value),
-        required_skills: document.getElementById('required_skills').value.split(',').map(skill => skill.trim())
-    };
-    
-    const spinner = document.getElementById('team-spinner');
-    spinner.style.display = 'block';
-
-    fetch('/form_team', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-    })
-    .then(response => response.json())
-    .then(data => {
-        spinner.style.display = 'none';
-        if (data.error) {
-            document.getElementById('team-error').textContent = data.error;
-            document.getElementById('team-result').innerHTML = '';
-        } else {
-            document.getElementById('team-error').textContent = '';
-            let teamHtml = '<h3>Optimal Team:</h3>';
-            data.optimal_team.forEach((member, index) => {
-                teamHtml += `
-                    <h4>Member ${index + 1}</h4>
-                    <p>Age: ${member.age}</p>
-                    <p>Department: ${member.department}</p>
-                    <p>Job Role: ${member.job_role}</p>
-                    <p>Performance Score: ${member.performance_score.toFixed(2)}</p>
-                    <p>Job Satisfaction: ${member.job_satisfaction}</p>
-                    <p>Years at Company: ${member.years_at_company}</p>
-                    <hr>
-                `;
-            });
-            document.getElementById('team-result').innerHTML = teamHtml;
-            updateTeamChart(data.optimal_team);
-        }
-    })
-    .catch(error => {
-        spinner.style.display = 'none';
-        document.getElementById('team-error').textContent = 'An error occurred. Please try again.';
-    });
-}
-
-function updatePerformanceChart(performance) {
-    const ctx = document.getElementById('performance-chart').getContext('2d');
-    if (performanceChart) {
-        performanceChart.destroy();
-    }
-    performanceChart = new Chart(ctx, {
-        type: 'bar',
+    performanceChart = new Chart(performanceCtx, {
+        type: userSettings.getSettings().preferredChartType,
         data: {
             labels: ['Predicted Performance'],
             datasets: [{
                 label: 'Performance Score',
-                data: [performance],
+                data: [],
                 backgroundColor: 'rgba(75, 192, 192, 0.6)',
                 borderColor: 'rgba(75, 192, 192, 1)',
                 borderWidth: 1
@@ -169,23 +56,26 @@ function updatePerformanceChart(performance) {
                     beginAtZero: true,
                     max: 5
                 }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `Score: ${context.raw.toFixed(2)}`;
+                        }
+                    }
+                }
             }
         }
     });
-}
 
-function updateTeamChart(team) {
-    const ctx = document.getElementById('team-chart').getContext('2d');
-    if (teamChart) {
-        teamChart.destroy();
-    }
-    teamChart = new Chart(ctx, {
-        type: 'bar',
+    teamChart = new Chart(teamCtx, {
+        type: userSettings.getSettings().preferredChartType,
         data: {
-            labels: team.map((_, index) => `Member ${index + 1}`),
+            labels: [],
             datasets: [{
                 label: 'Performance Score',
-                data: team.map(member => member.performance_score),
+                data: [],
                 backgroundColor: 'rgba(54, 162, 235, 0.6)',
                 borderColor: 'rgba(54, 162, 235, 1)',
                 borderWidth: 1
@@ -198,12 +88,52 @@ function updateTeamChart(team) {
                     beginAtZero: true,
                     max: 5
                 }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const member = context.chart.data.datasets[0].data[context.dataIndex];
+                            return [
+                                `Score: ${member.performance_score.toFixed(2)}`,
+                                `Age: ${member.age}`,
+                                `Department: ${member.department}`,
+                                `Job Role: ${member.job_role}`
+                            ];
+                        }
+                    }
+                }
             }
         }
     });
 }
 
-// Check for saved dark mode preference
-if (localStorage.getItem('darkMode') === 'true') {
-    document.body.classList.add('dark-mode');
+function updateChartType(chartType) {
+    userSettings.updateSetting('preferredChartType', chartType);
+    performanceChart.config.type = chartType;
+    teamChart.config.type = chartType;
+    performanceChart.update();
+    teamChart.update();
 }
+
+function filterChartData(filter) {
+    // Implement data filtering logic here
+    // For example, you could filter team members by department
+    const filteredTeam = teamData.filter(member => member.department === filter);
+    updateTeamChart(filteredTeam);
+}
+
+// ... (rest of the existing code)
+
+function updatePerformanceChart(performance) {
+    performanceChart.data.datasets[0].data = [performance];
+    performanceChart.update();
+}
+
+function updateTeamChart(team) {
+    teamChart.data.labels = team.map((_, index) => `Member ${index + 1}`);
+    teamChart.data.datasets[0].data = team;
+    teamChart.update();
+}
+
+// ... (rest of the existing code)
