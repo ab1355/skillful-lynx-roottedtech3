@@ -33,4 +33,4 @@ const notificationSystem = new NotificationSystem();
 // Example usage:
 // notificationSystem.show('Welcome to AgentZero HR Analytics!', 'info');
 // notificationSystem.show('Error occurred while processing data.', 'error');
-// notificationSystem.show('Successfully updated user profile.', 'success');
+// notificationSystem.show('Successfully updated user profile.', 'success');// Test comment

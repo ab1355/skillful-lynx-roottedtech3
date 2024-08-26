@@ -61,4 +61,4 @@ function updateCharts() {
 document.addEventListener('DOMContentLoaded', function() {
     showDefaultView();
     updateCharts();
-});
+});// Test comment
