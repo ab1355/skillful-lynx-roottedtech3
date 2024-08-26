@@ -2,6 +2,7 @@ import asyncio
 from collaborative_intelligence import Agent, MultiAgentSystem
 from task import Task
 import random
+import matplotlib.pyplot as plt
 
 async def test_enhanced_collaborative_intelligence():
     print("Testing Enhanced Collaborative Intelligence Framework")
@@ -27,9 +28,9 @@ async def test_enhanced_collaborative_intelligence():
         print(f"{agent.agent_id} reputation: {agent.reputation:.2f}")
 
     print("\n2. Extended Simulation:")
-    num_steps = 100  # Increased simulation steps
+    num_steps = 200  # Increased simulation steps
     for step in range(num_steps):
-        if step % 10 == 0:
+        if step % 20 == 0:
             print(f"Step {step}/{num_steps}")
         await mas.run_simulation(1)
     final_performance = mas.evaluate_system_performance()
@@ -65,6 +66,16 @@ async def test_enhanced_collaborative_intelligence():
     print("Last 20 log entries:")
     for entry in log[-20:]:
         print(entry)
+
+    print("\n8. Long-term Performance:")
+    performance_history = mas.get_performance_history()
+    plt.figure(figsize=(10, 6))
+    plt.plot(performance_history)
+    plt.title("System Performance Over Time")
+    plt.xlabel("Evaluation Interval")
+    plt.ylabel("System Performance")
+    plt.savefig("system_performance.png")
+    print("Long-term performance graph saved as 'system_performance.png'")
 
     print("\nEnhanced Collaborative Intelligence test completed successfully!")
 
