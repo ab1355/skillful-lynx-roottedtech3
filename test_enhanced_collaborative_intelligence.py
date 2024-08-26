@@ -41,6 +41,7 @@ async def test_enhanced_collaborative_intelligence():
     print("\n4. Knowledge Sharing Statistics:")
     for agent in mas.agents:
         print(f"{agent.agent_id} knowledge base size: {len(agent.knowledge_base)}")
+        print(f"  Knowledge topics: {list(agent.knowledge_base.keys())}")
 
     print("\n5. Task Performance by Type:")
     for agent in mas.agents:
@@ -49,7 +50,13 @@ async def test_enhanced_collaborative_intelligence():
             success_rate = performance['success'] / max(1, performance['total'])
             print(f"  {task_type}: {success_rate:.2f} ({performance['total']} tasks)")
 
-    print("\n6. System Log Highlights:")
+    print("\n6. Workload Balance:")
+    total_tasks = sum(sum(perf['total'] for perf in agent.performance_by_task_type.values()) for agent in mas.agents)
+    for agent in mas.agents:
+        agent_tasks = sum(perf['total'] for perf in agent.performance_by_task_type.values())
+        print(f"{agent.agent_id}: {agent_tasks} tasks ({agent_tasks/total_tasks*100:.2f}% of total)")
+
+    print("\n7. System Log Highlights:")
     log = mas.get_log()
     print(f"Total log entries: {len(log)}")
     print("Last 10 log entries:")
