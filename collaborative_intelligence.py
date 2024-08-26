@@ -1,80 +1,92 @@
 import numpy as np
-from typing import List, Dict, Any
-import asyncio
+from typing import List, Dict, Any, Tuple
 import random
+import asyncio
+from collections import defaultdict
+from models import SpecializedModel
+from task import Task
 
 class Agent:
-    def __init__(self, agent_id: str, model_params: np.ndarray):
+    def __init__(self, agent_id: str, model: SpecializedModel, specialization: str):
         self.agent_id = agent_id
-        self.model_params = model_params
+        self.model = model
+        self.specialization = specialization
         self.knowledge_base = {}
         self.task_queue = asyncio.Queue()
+        self.reputation = 1.0
 
-    async def process_task(self):
-        while True:
-            task = await self.task_queue.get()
-            result = self.perform_task(task)
-            print(f"Agent {self.agent_id} completed task: {task}")
-            self.task_queue.task_done()
-            return result
-
-    def perform_task(self, task: Dict[str, Any]) -> Any:
-        # Simplified task performance
-        return f"Result of task {task['id']} by Agent {self.agent_id}"
+    async def process_task(self, task: Task) -> Tuple[str, float]:
+        # Simulate task processing
+        processing_time = task.complexity * (1 / self.reputation)
+        await asyncio.sleep(processing_time)
+        success_probability = min(1.0, self.reputation / task.complexity)
+        success = random.random() < success_probability
+        return task.task_id, 1.0 if success else 0.0
 
     def update_knowledge(self, new_knowledge: Dict[str, Any]):
-        self.knowledge_base.update(new_knowledge)
+        for key, value in new_knowledge.items():
+            if key in self.knowledge_base and self.knowledge_base[key] != value:
+                # Conflict resolution: keep the knowledge with higher confidence
+                old_confidence = self.knowledge_base[key].get('confidence', 0.5)
+                new_confidence = value.get('confidence', 0.5)
+                if new_confidence > old_confidence:
+                    self.knowledge_base[key] = value
+            else:
+                self.knowledge_base[key] = value
 
-    def get_model_parameters(self):
-        return self.model_params.copy()
+    def decide_knowledge_to_share(self) -> Dict[str, Any]:
+        # Share knowledge with confidence above a threshold
+        return {k: v for k, v in self.knowledge_base.items() if v.get('confidence', 0) > 0.7}
 
-    def set_model_parameters(self, parameters: np.ndarray):
-        self.model_params = parameters.copy()
+    async def request_information(self, topic: str, mas: 'MultiAgentSystem'):
+        return await mas.handle_information_request(self, topic)
+
+    def train_on_local_data(self, data: np.ndarray):
+        self.model.train(data)
+
+    def get_parameters(self) -> Dict[str, np.ndarray]:
+        return self.model.get_parameters()
 
 class MultiAgentSystem:
     def __init__(self, agents: List[Agent]):
         self.agents = agents
+        self.task_history = defaultdict(list)
 
-    async def coordinate_tasks(self, tasks: List[Dict[str, Any]]):
+    async def allocate_tasks(self, tasks: List[Task]):
         for task in tasks:
-            agent = random.choice(self.agents)
-            await agent.task_queue.put(task)
+            suitable_agents = [agent for agent in self.agents if agent.specialization == task.domain]
+            if suitable_agents:
+                chosen_agent = max(suitable_agents, key=lambda a: a.reputation / (len(a.task_queue._queue) + 1))
+            else:
+                # If no suitable agent, assign to the agent with the highest reputation
+                chosen_agent = max(self.agents, key=lambda a: a.reputation / (len(a.task_queue._queue) + 1))
+            await chosen_agent.task_queue.put(task)
 
-        await asyncio.gather(*[agent.process_task() for agent in self.agents])
+    async def process_all_tasks(self):
+        tasks = [agent.process_task(task) for agent in self.agents for task in agent.task_queue._queue]
+        results = await asyncio.gather(*tasks)
+        for agent, (task_id, success_rate) in zip(self.agents, results):
+            self.task_history[agent.agent_id].append((task_id, success_rate))
+            agent.reputation = sum(s for _, s in self.task_history[agent.agent_id][-10:]) / 10  # Moving average of last 10 tasks
 
     def federated_learning_round(self):
-        # Aggregate model parameters
-        aggregated_params = np.mean([agent.get_model_parameters() for agent in self.agents], axis=0)
+        # Simple averaging of model parameters
+        averaged_params = {}
+        for param_name in self.agents[0].get_parameters().keys():
+            averaged_params[param_name] = np.mean([agent.get_parameters()[param_name] for agent in self.agents], axis=0)
 
-        # Update all agents with the new parameters
         for agent in self.agents:
-            agent.set_model_parameters(aggregated_params)
+            agent.model.set_parameters(averaged_params)
 
     async def collaborative_exchange(self):
-        for i, agent in enumerate(self.agents):
-            next_agent = self.agents[(i + 1) % len(self.agents)]
-            knowledge = random.choice(list(agent.knowledge_base.items()))
-            next_agent.update_knowledge({knowledge[0]: knowledge[1]})
-            print(f"Agent {agent.agent_id} shared knowledge '{knowledge[0]}' with Agent {next_agent.agent_id}")
+        for agent in self.agents:
+            knowledge_to_share = agent.decide_knowledge_to_share()
+            for other_agent in self.agents:
+                if other_agent != agent:
+                    other_agent.update_knowledge(knowledge_to_share)
 
-async def main():
-    # Create agents
-    agents = [Agent(f"Agent_{i}", np.random.randn(10)) for i in range(3)]
-    mas = MultiAgentSystem(agents)
-
-    # Simulate tasks
-    tasks = [{"id": i, "data": np.random.randn(10)} for i in range(5)]
-
-    # Coordinate tasks
-    await mas.coordinate_tasks(tasks)
-
-    # Perform federated learning
-    mas.federated_learning_round()
-
-    # Simulate collaborative exchange
-    for agent in agents:
-        agent.update_knowledge({f"key_{agent.agent_id}": f"value_{agent.agent_id}"})
-    await mas.collaborative_exchange()
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    async def handle_information_request(self, requesting_agent: Agent, topic: str) -> Any:
+        for agent in self.agents:
+            if agent != requesting_agent and topic in agent.knowledge_base:
+                return agent.knowledge_base[topic]
+        return None
