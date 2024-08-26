@@ -1,20 +1,33 @@
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.metrics import mean_squared_error, r2_score
-from sklearn.feature_selection import SelectKBest, f_regression
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.feature_selection import SelectKBest, f_regression
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+from sklearn.linear_model import LinearRegression, Ridge, Lasso
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.svm import SVR
+from sklearn.neural_network import MLPRegressor
+from xgboost import XGBRegressor
+from lightgbm import LGBMRegressor
 
 class AdvancedRiskPredictor:
     def __init__(self):
         self.models = {
-            'RandomForest': RandomForestRegressor(n_estimators=100, random_state=42),
-            'GradientBoosting': GradientBoostingRegressor(n_estimators=100, random_state=42),
-            'NeuralNetwork': MLPRegressor(hidden_layer_sizes=(100, 50), max_iter=2000, random_state=42)
+            'Linear Regression': LinearRegression(),
+            'Ridge': Ridge(),
+            'Lasso': Lasso(),
+            'Random Forest': RandomForestRegressor(n_estimators=100, random_state=42),
+            'Gradient Boosting': GradientBoostingRegressor(n_estimators=100, random_state=42),
+            'SVR': SVR(),
+            'Neural Network': MLPRegressor(hidden_layer_sizes=(100, 50), max_iter=2000, random_state=42),
+            'XGBoost': XGBRegressor(random_state=42),
+            'LightGBM': LGBMRegressor(random_state=42)
         }
         self.preprocessor = None
         self.feature_selector = SelectKBest(score_func=f_regression, k=10)
@@ -50,8 +63,14 @@ class AdvancedRiskPredictor:
         numeric_features = [col for col in data.columns if col not in ['model_size', 'prompt_effectiveness_score']]
         categorical_features = ['model_size']
 
-        numeric_transformer = StandardScaler()
-        categorical_transformer = OneHotEncoder(drop='first')
+        numeric_transformer = Pipeline(steps=[
+            ('imputer', SimpleImputer(strategy='median')),
+            ('scaler', StandardScaler())
+        ])
+        categorical_transformer = Pipeline(steps=[
+            ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
+            ('onehot', OneHotEncoder(drop='first', handle_unknown='ignore'))
+        ])
 
         self.preprocessor = ColumnTransformer(
             transformers=[
@@ -76,10 +95,18 @@ class AdvancedRiskPredictor:
             model.fit(X_train, y_train)
             y_pred = model.predict(X_test)
             mse = mean_squared_error(y_test, y_pred)
+            rmse = np.sqrt(mse)
+            mae = mean_absolute_error(y_test, y_pred)
             r2 = r2_score(y_test, y_pred)
             cv_scores = cross_val_score(model, X, y, cv=5, scoring='neg_mean_squared_error')
             
-            results[name] = {'MSE': mse, 'R2': r2, 'CV_MSE': -cv_scores.mean()}
+            results[name] = {
+                'MSE': mse,
+                'RMSE': rmse,
+                'MAE': mae,
+                'R2': r2,
+                'CV_MSE': -cv_scores.mean()
+            }
 
         self.best_model = min(results, key=lambda x: results[x]['CV_MSE'])
         
@@ -87,16 +114,61 @@ class AdvancedRiskPredictor:
         for name, metrics in results.items():
             print(f"{name}:")
             print(f"  MSE: {metrics['MSE']:.4f}")
+            print(f"  RMSE: {metrics['RMSE']:.4f}")
+            print(f"  MAE: {metrics['MAE']:.4f}")
             print(f"  R2: {metrics['R2']:.4f}")
             print(f"  Cross-Validation MSE: {metrics['CV_MSE']:.4f}")
         
         print(f"\nBest Model: {self.best_model}")
+
+        # Visualize model performance
+        model_names = list(results.keys())
+        mse_scores = [results[name]['MSE'] for name in model_names]
+        r2_scores = [results[name]['R2'] for name in model_names]
+
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
+        ax1.bar(model_names, mse_scores)
+        ax1.set_title('MSE Scores by Model')
+        ax1.set_ylabel('MSE')
+        ax1.set_xticklabels(model_names, rotation=45, ha='right')
+
+        ax2.bar(model_names, r2_scores)
+        ax2.set_title('R2 Scores by Model')
+        ax2.set_ylabel('R2')
+        ax2.set_xticklabels(model_names, rotation=45, ha='right')
+
+        plt.tight_layout()
+        plt.savefig('model_performance_comparison.png')
+        plt.close()
 
     def predict_prompt_effectiveness(self, prompt_data):
         prompt_data = self.engineer_features(prompt_data)
         X_preprocessed = self.preprocessor.transform(prompt_data)
         X_selected = self.feature_selector.transform(X_preprocessed)
         return self.models[self.best_model].predict(X_selected)
+
+    def visualize_feature_importance(self, data):
+        X, y = self.preprocess_data(data)
+        feature_names = self.preprocessor.get_feature_names_out()
+        feature_importances = self.feature_selector.scores_
+
+        plt.figure(figsize=(10, 6))
+        sns.barplot(x=feature_importances, y=feature_names)
+        plt.title('Feature Importance')
+        plt.xlabel('Importance Score')
+        plt.tight_layout()
+        plt.savefig('feature_importance.png')
+        plt.close()
+
+    def visualize_correlation_matrix(self, data):
+        numeric_data = data.select_dtypes(include=[np.number])
+        correlation_matrix = numeric_data.corr()
+        plt.figure(figsize=(12, 10))
+        sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', vmin=-1, vmax=1, center=0)
+        plt.title('Correlation Matrix of Numeric Features')
+        plt.tight_layout()
+        plt.savefig('correlation_matrix.png')
+        plt.close()
 
 # Example usage
 if __name__ == "__main__":
@@ -105,8 +177,14 @@ if __name__ == "__main__":
     # Load and preprocess data
     data = risk_predictor.load_llm_prompting_data()
     
+    # Visualize correlation matrix
+    risk_predictor.visualize_correlation_matrix(data)
+
     # Train and evaluate models
     risk_predictor.train_and_evaluate(data)
+
+    # Visualize feature importance
+    risk_predictor.visualize_feature_importance(data)
 
     # Example prediction
     new_prompt = pd.DataFrame({
@@ -124,7 +202,7 @@ if __name__ == "__main__":
 
     predicted_effectiveness = risk_predictor.predict_prompt_effectiveness(new_prompt)
     print(f"\nPredicted prompt effectiveness score: {predicted_effectiveness[0]:.2f}")
-    
+
     print("\nMost important features:")
     feature_names = risk_predictor.preprocessor.get_feature_names_out()
     feature_importances = risk_predictor.feature_selector.scores_
