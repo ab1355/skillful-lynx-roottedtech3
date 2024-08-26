@@ -27,7 +27,7 @@ async def test_enhanced_collaborative_intelligence():
         print(f"{agent.agent_id} reputation: {agent.reputation:.2f}")
 
     print("\n2. Extended Simulation:")
-    num_steps = 50  # Reduced simulation steps
+    num_steps = 100  # Increased simulation steps
     for step in range(num_steps):
         if step % 10 == 0:
             print(f"Step {step}/{num_steps}")
@@ -44,7 +44,7 @@ async def test_enhanced_collaborative_intelligence():
     print("\n4. Knowledge Sharing Statistics:")
     for agent in mas.agents:
         print(f"{agent.agent_id} knowledge base size: {len(agent.knowledge_base)}")
-        print(f"  Knowledge topics: {list(agent.knowledge_base.keys())}")
+        print(f"  Knowledge topics: {list(agent.knowledge_base.keys())[:5]}...")  # Show first 5 topics
 
     print("\n5. Task Performance by Type:")
     for agent in mas.agents:

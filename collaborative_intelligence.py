@@ -30,7 +30,20 @@ class Agent:
         self.task_history.append((task.task_id, result))
         self.performance_by_task_type[task.domain]['success'] += result
         self.performance_by_task_type[task.domain]['total'] += 1
+        
+        # Knowledge generation
+        if success:
+            self.generate_knowledge(task)
+        
         return task.task_id, result
+
+    def generate_knowledge(self, task: Task):
+        knowledge_key = f"{task.domain}_technique_{random.randint(1, 100)}"
+        confidence = random.uniform(0.6, 1.0)
+        self.knowledge_base[knowledge_key] = {
+            'content': f"Learned technique for {task.domain} tasks",
+            'confidence': confidence
+        }
 
     def update_knowledge(self, new_knowledge: Dict[str, Any]):
         for key, value in new_knowledge.items():
@@ -96,8 +109,9 @@ class MultiAgentSystem:
             performance_score = self._calculate_agent_performance(agent)
             workload_score = 1 / (agent_workloads[agent] + 1)
             specialization_score = 2 if agent.specialization == task.domain else 1
-            warm_up_score = min(1, (self.current_time - agent.creation_time) / 5)  # Reduced warm-up period
-            total_score = performance_score * workload_score * specialization_score * warm_up_score
+            warm_up_score = min(1, (self.current_time - agent.creation_time) / 3)  # Further reduced warm-up period
+            integration_score = 1 if len(agent.task_history) < 10 else 0.5  # Boost for new agents
+            total_score = performance_score * workload_score * specialization_score * warm_up_score * integration_score
             agent_scores.append((agent, total_score))
         chosen_agent = max(agent_scores, key=lambda x: x[1])[0]
         self.log.append(f"Time {self.current_time}: Chose {chosen_agent.agent_id} for task {task.task_id}")
@@ -122,8 +136,8 @@ class MultiAgentSystem:
     def _update_agent_reputation(self, agent: Agent):
         recent_performance = self._calculate_agent_performance(agent)
         task_diversity = len(set(task_id for task_id, _ in agent.task_history[-20:]))
-        knowledge_contribution = len(agent.knowledge_base) / 10  # Assuming a max of 10 knowledge items is good
-        agent.reputation = 0.6 * recent_performance + 0.2 * (task_diversity / 20) + 0.2 * knowledge_contribution
+        knowledge_contribution = len(agent.knowledge_base) / 20  # Increased max knowledge items
+        agent.reputation = 0.5 * recent_performance + 0.3 * (task_diversity / 20) + 0.2 * knowledge_contribution
         self.log.append(f"Time {self.current_time}: Updated {agent.agent_id} reputation to {agent.reputation:.2f}")
 
     def federated_learning_round(self):
@@ -177,10 +191,21 @@ class MultiAgentSystem:
         agent_performances = [self._calculate_agent_performance(agent) for agent in self.agents]
         overall_performance = sum(agent_performances) / len(agent_performances)
         task_coverage = len(set(agent.specialization for agent in self.agents)) / 3  # Assuming 3 task types
-        knowledge_diversity = len(set().union(*(agent.knowledge_base.keys() for agent in self.agents))) / 10  # Assuming 10 is a good number
-        system_performance = 0.6 * overall_performance + 0.2 * task_coverage + 0.2 * knowledge_diversity
+        knowledge_diversity = len(set().union(*(agent.knowledge_base.keys() for agent in self.agents))) / 30  # Increased expected knowledge items
+        workload_balance = self._calculate_workload_balance()
+        system_performance = 0.4 * overall_performance + 0.2 * task_coverage + 0.2 * knowledge_diversity + 0.2 * workload_balance
         self.log.append(f"Time {self.current_time}: System performance: {system_performance:.2f}")
         return system_performance
+
+    def _calculate_workload_balance(self):
+        if not self.agents:
+            return 0
+        workloads = [sum(perf['total'] for perf in agent.performance_by_task_type.values()) for agent in self.agents]
+        if not workloads or sum(workloads) == 0:
+            return 1  # Perfect balance if no work has been done
+        avg_workload = sum(workloads) / len(workloads)
+        max_deviation = max(abs(w - avg_workload) for w in workloads)
+        return 1 - (max_deviation / avg_workload)
 
     async def run_simulation(self, num_steps: int):
         for _ in range(num_steps):
