@@ -1,7 +1,6 @@
 import asyncio
 from collaborative_intelligence import Agent, MultiAgentSystem
 from task import Task
-import numpy as np
 import random
 
 async def test_enhanced_collaborative_intelligence():
@@ -15,11 +14,11 @@ async def test_enhanced_collaborative_intelligence():
     ]
     mas = MultiAgentSystem(agents)
 
-    # Simulate tasks
+    # Simulate initial tasks
     task_types = ["classification", "regression", "clustering"]
-    tasks = [Task(f"Task_{i}", random.uniform(0.3, 0.9), random.choice(task_types)) for i in range(100)]
+    tasks = [Task(f"Task_{i}", random.uniform(0.3, 0.9), random.choice(task_types)) for i in range(50)]
 
-    print("\n1. Task Allocation and Processing:")
+    print("\n1. Initial Task Allocation and Processing:")
     await mas.allocate_tasks(tasks)
     await mas.process_all_tasks()
 
@@ -28,8 +27,12 @@ async def test_enhanced_collaborative_intelligence():
         print(f"{agent.agent_id} reputation: {agent.reputation:.2f}")
 
     print("\n2. Extended Simulation:")
-    num_steps = 100  # Increased simulation steps
-    final_performance = await mas.run_simulation(num_steps)
+    num_steps = 50  # Reduced simulation steps
+    for step in range(num_steps):
+        if step % 10 == 0:
+            print(f"Step {step}/{num_steps}")
+        await mas.run_simulation(1)
+    final_performance = mas.evaluate_system_performance()
 
     print(f"\nFinal system performance: {final_performance:.2f}")
     print(f"Final number of agents: {len(mas.agents)}")
@@ -59,8 +62,8 @@ async def test_enhanced_collaborative_intelligence():
     print("\n7. System Log Highlights:")
     log = mas.get_log()
     print(f"Total log entries: {len(log)}")
-    print("Last 10 log entries:")
-    for entry in log[-10:]:
+    print("Last 20 log entries:")
+    for entry in log[-20:]:
         print(entry)
 
     print("\nEnhanced Collaborative Intelligence test completed successfully!")

@@ -96,7 +96,7 @@ class MultiAgentSystem:
             performance_score = self._calculate_agent_performance(agent)
             workload_score = 1 / (agent_workloads[agent] + 1)
             specialization_score = 2 if agent.specialization == task.domain else 1
-            warm_up_score = min(1, (self.current_time - agent.creation_time) / 10)  # Warm-up period
+            warm_up_score = min(1, (self.current_time - agent.creation_time) / 5)  # Reduced warm-up period
             total_score = performance_score * workload_score * specialization_score * warm_up_score
             agent_scores.append((agent, total_score))
         chosen_agent = max(agent_scores, key=lambda x: x[1])[0]
@@ -137,11 +137,14 @@ class MultiAgentSystem:
         for agent in self.agents:
             if agent.should_share_knowledge(self.current_time):
                 knowledge_to_share = agent.decide_knowledge_to_share()
-                for other_agent in self.agents:
-                    if other_agent != agent:
-                        other_agent.update_knowledge(knowledge_to_share)
-                agent.last_knowledge_share = self.current_time
-                self.log.append(f"Time {self.current_time}: {agent.agent_id} shared knowledge: {list(knowledge_to_share.keys())}")
+                if knowledge_to_share:  # Only share if there's knowledge to share
+                    for other_agent in self.agents:
+                        if other_agent != agent:
+                            other_agent.update_knowledge(knowledge_to_share)
+                    agent.last_knowledge_share = self.current_time
+                    self.log.append(f"Time {self.current_time}: {agent.agent_id} shared knowledge: {list(knowledge_to_share.keys())}")
+                else:
+                    self.log.append(f"Time {self.current_time}: {agent.agent_id} had no knowledge to share")
 
             if agent.should_request_information(self.current_time):
                 topic = random.choice(list(agent.knowledge_base.keys())) if agent.knowledge_base else "general"
@@ -149,6 +152,8 @@ class MultiAgentSystem:
                 if info:
                     agent.update_knowledge({topic: info})
                     self.log.append(f"Time {self.current_time}: {agent.agent_id} received information on {topic}")
+                else:
+                    self.log.append(f"Time {self.current_time}: {agent.agent_id} requested information on {topic}, but none was available")
 
     async def handle_information_request(self, requesting_agent: Agent, topic: str) -> Any:
         for agent in self.agents:
@@ -180,6 +185,11 @@ class MultiAgentSystem:
     async def run_simulation(self, num_steps: int):
         for _ in range(num_steps):
             self.current_time += 1
+            
+            # Generate new tasks
+            new_tasks = [Task(f"Task_{self.current_time}_{i}", random.uniform(0.3, 0.9), random.choice(["classification", "regression", "clustering"])) for i in range(5)]
+            await self.allocate_tasks(new_tasks)
+            
             await self.process_all_tasks()
             self.federated_learning_round()
             await self.collaborative_exchange()
