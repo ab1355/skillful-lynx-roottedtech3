@@ -2,12 +2,12 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
 from sklearn.preprocessing import StandardScaler, OneHotEncoder, PowerTransformer
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
-from sklearn.feature_selection import SelectKBest, f_regression
+from sklearn.feature_selection import SelectKBest, f_regression, RFE
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 from sklearn.linear_model import LinearRegression, Ridge, Lasso
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
@@ -15,6 +15,7 @@ from sklearn.svm import SVR
 from sklearn.neural_network import MLPRegressor
 from xgboost import XGBRegressor
 from lightgbm import LGBMRegressor
+from sklearn.inspection import permutation_importance
 
 class AdvancedRiskPredictor:
     def __init__(self):
@@ -34,6 +35,7 @@ class AdvancedRiskPredictor:
         self.best_model = None
         self.prompt_length_bins = None
         self.time_constraint_bins = None
+        self.selected_feature_names = None
 
     def load_llm_prompting_data(self):
         np.random.seed(42)
@@ -105,6 +107,10 @@ class AdvancedRiskPredictor:
         X_preprocessed = self.preprocessor.fit_transform(X)
         X_selected = self.feature_selector.fit_transform(X_preprocessed, y)
         
+        # Update selected feature names
+        feature_names = self.preprocessor.get_feature_names_out()
+        self.selected_feature_names = feature_names[self.feature_selector.get_support()]
+        
         return X_selected, y
 
     def train_and_evaluate(self, data):
@@ -113,7 +119,19 @@ class AdvancedRiskPredictor:
 
         results = {}
         for name, model in self.models.items():
-            model.fit(X_train, y_train)
+            if name == 'Random Forest':
+                param_grid = {
+                    'n_estimators': [50, 100, 200],
+                    'max_depth': [None, 10, 20],
+                    'min_samples_split': [2, 5, 10]
+                }
+                grid_search = GridSearchCV(model, param_grid, cv=5, scoring='neg_mean_squared_error')
+                grid_search.fit(X_train, y_train)
+                model = grid_search.best_estimator_
+                self.models[name] = model
+            else:
+                model.fit(X_train, y_train)
+            
             y_pred = model.predict(X_test)
             mse = mean_squared_error(y_test, y_pred)
             rmse = np.sqrt(mse)
@@ -145,6 +163,9 @@ class AdvancedRiskPredictor:
         # Visualize model performance
         self.visualize_model_performance(results)
 
+        # Feature importance for the best model
+        self.visualize_feature_importance(X, y, self.models[self.best_model])
+
     def predict_prompt_effectiveness(self, prompt_data):
         prompt_data = self.engineer_features(prompt_data)
         
@@ -158,15 +179,18 @@ class AdvancedRiskPredictor:
         X_selected = self.feature_selector.transform(X_preprocessed)
         return self.models[self.best_model].predict(X_selected)
 
-    def visualize_feature_importance(self, data):
-        X, y = self.preprocess_data(data)
-        feature_names = self.preprocessor.get_feature_names_out()
-        feature_importances = self.feature_selector.scores_
+    def visualize_feature_importance(self, X, y, model):
+        if hasattr(model, 'feature_importances_'):
+            importances = model.feature_importances_
+        else:
+            importances = permutation_importance(model, X, y, n_repeats=10, random_state=42).importances_mean
+        
+        feature_importance = pd.DataFrame({'feature': self.selected_feature_names, 'importance': importances})
+        feature_importance = feature_importance.sort_values('importance', ascending=False).head(15)
 
         plt.figure(figsize=(10, 6))
-        sns.barplot(x=feature_importances, y=feature_names)
-        plt.title('Feature Importance')
-        plt.xlabel('Importance Score')
+        sns.barplot(x='importance', y='feature', data=feature_importance)
+        plt.title(f'Top 15 Feature Importances for {self.best_model}')
         plt.tight_layout()
         plt.savefig('feature_importance.png')
         plt.close()
@@ -201,6 +225,20 @@ class AdvancedRiskPredictor:
         plt.savefig('model_performance_comparison.png')
         plt.close()
 
+    def visualize_residuals(self, X_test, y_test):
+        y_pred = self.models[self.best_model].predict(X_test)
+        residuals = y_test - y_pred
+
+        plt.figure(figsize=(10, 6))
+        sns.scatterplot(x=y_pred, y=residuals)
+        plt.axhline(y=0, color='r', linestyle='--')
+        plt.title('Residual Plot')
+        plt.xlabel('Predicted Values')
+        plt.ylabel('Residuals')
+        plt.tight_layout()
+        plt.savefig('residual_plot.png')
+        plt.close()
+
 # Example usage
 if __name__ == "__main__":
     risk_predictor = AdvancedRiskPredictor()
@@ -214,8 +252,10 @@ if __name__ == "__main__":
     # Train and evaluate models
     risk_predictor.train_and_evaluate(data)
 
-    # Visualize feature importance
-    risk_predictor.visualize_feature_importance(data)
+    # Visualize residuals
+    X, y = risk_predictor.preprocess_data(data)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    risk_predictor.visualize_residuals(X_test, y_test)
 
     # Example prediction
     new_prompt = pd.DataFrame({
@@ -235,8 +275,6 @@ if __name__ == "__main__":
     print(f"\nPredicted prompt effectiveness score: {predicted_effectiveness[0]:.2f}")
 
     print("\nMost important features:")
-    feature_names = risk_predictor.preprocessor.get_feature_names_out()
-    feature_importances = risk_predictor.feature_selector.scores_
-    top_features = sorted(zip(feature_names, feature_importances), key=lambda x: x[1], reverse=True)[:5]
+    top_features = sorted(zip(risk_predictor.selected_feature_names, risk_predictor.feature_selector.scores_), key=lambda x: x[1], reverse=True)[:5]
     for name, importance in top_features:
         print(f"{name}: {importance:.2f}")
