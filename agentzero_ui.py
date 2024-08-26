@@ -21,6 +21,7 @@ app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max-limit
 
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
@@ -42,8 +43,21 @@ def chat():
     return render_template('chat.html')
 
 def generate_response(message):
-    # Simple response generation
-    return f"Thank you for your message about '{message}'. I'm processing your request."
+    # More sophisticated response generation
+    if 'performance' in message.lower():
+        avg_performance = calculate_avg_performance(hr_data)
+        return f"The average performance score is {avg_performance:.2f}."
+    elif 'department' in message.lower():
+        dept_dist = get_dept_distribution(hr_data)
+        return f"Department distribution: {dept_dist}"
+    elif 'age' in message.lower():
+        age_dist = get_age_distribution(hr_data)
+        return f"Age distribution: {age_dist}"
+    elif 'tenure' in message.lower():
+        tenure_dist = get_tenure_distribution(hr_data)
+        return f"Tenure distribution: {tenure_dist}"
+    else:
+        return f"Thank you for your message about '{message}'. How can I assist you with HR data analysis?"
 
 @app.route('/api/messages', methods=['GET', 'POST'])
 def handle_messages():
@@ -56,20 +70,24 @@ def handle_messages():
         if file:
             logging.debug(f"Received file: {file.filename}")
         
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(file_path)
-            chat_messages.append({'text': message, 'file': filename, 'sender': 'user'})
-        else:
-            chat_messages.append({'text': message, 'sender': 'user'})
-        
-        # Generate and add response
-        response = generate_response(message)
-        chat_messages.append({'text': response, 'sender': 'bot'})
-        
-        logging.debug(f"Current chat messages: {chat_messages}")
-        return jsonify({'status': 'success'})
+        try:
+            if file and allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(file_path)
+                chat_messages.append({'text': message, 'file': filename, 'sender': 'user'})
+            else:
+                chat_messages.append({'text': message, 'sender': 'user'})
+            
+            # Generate and add response
+            response = generate_response(message)
+            chat_messages.append({'text': response, 'sender': 'bot'})
+            
+            logging.debug(f"Current chat messages: {chat_messages}")
+            return jsonify({'status': 'success'})
+        except Exception as e:
+            logging.error(f"Error processing message: {str(e)}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
     else:
         logging.debug(f"Returning chat messages: {chat_messages}")
         return jsonify(chat_messages)
@@ -79,7 +97,19 @@ def uploaded_file(filename):
     logging.debug(f"Accessing file: {filename}")
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-# ... (keep all other existing routes)
+@app.route('/visualizations')
+def visualizations():
+    logging.debug("Accessing visualizations route")
+    dept_dist = get_dept_distribution(hr_data)
+    age_dist = get_age_distribution(hr_data)
+    tenure_dist = get_tenure_distribution(hr_data)
+    avg_performance = calculate_avg_performance(hr_data)
+    
+    return render_template('visualizations.html', 
+                           dept_dist=dept_dist, 
+                           age_dist=age_dist, 
+                           tenure_dist=tenure_dist, 
+                           avg_performance=avg_performance)
 
 if __name__ == '__main__':
     app.run(host=config.HOST, port=config.PORT, debug=True)
