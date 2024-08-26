@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Form Optimal Team</title>
+</head>
+<body>
+    <h1>Form Optimal Team</h1>
+    <form method="POST">
+        <label for="team_size">Team Size:</label>
+        <input type="number" id="team_size" name="team_size" required><br><br>
+        <label for="required_skills">Required Skills (comma-separated):</label>
+        <input type="text" id="required_skills" name="required_skills" required><br><br>
+        <input type="submit" value="Form Team">
+    </form>
+    {% if team %}
+        <h2>Optimal Team:</h2>
+        <ul>
+        {% for member in team %}
+            <li>ID: {{ member.id }}, Name: {{ member.name }}, Skills: {{ member.skills|join(', ') }}</li>
+        {% endfor %}
+        </ul>
+    {% endif %}
+    {% if error %}
+        <p style="color: red;">Error: {{ error }}</p>
+    {% endif %}
+    <br>
+    <a href="/">Back to Home</a>
+</body>
+</html>

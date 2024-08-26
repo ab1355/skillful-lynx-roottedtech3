@@ -1,6 +1,6 @@
 import json
 import logging
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from hr_data import load_hr_data, calculate_avg_performance, get_dept_distribution, get_age_distribution, get_tenure_distribution
 import config
 
@@ -39,7 +39,7 @@ def form_optimal_team(team_size, required_skills):
 
 @app.route('/')
 def home():
-    return "Welcome to AgentZero HR Analytics"
+    return render_template('index.html')
 
 @app.route('/dashboard')
 def dashboard():
@@ -50,37 +50,41 @@ def dashboard():
         "age_distribution": get_age_distribution(hr_data),
         "tenure_distribution": get_tenure_distribution(hr_data)
     }
-    return jsonify(dashboard_data)
+    return render_template('dashboard.html', data=dashboard_data)
 
 @app.route('/health')
 def health():
     return jsonify({"status": "healthy"})
 
-@app.route('/predict_performance', methods=['POST'])
+@app.route('/predict_performance', methods=['GET', 'POST'])
 def predict_performance_route():
-    try:
-        data = request.json
-        predicted_performance = predict_performance(data)
-        return jsonify({'predicted_performance': predicted_performance})
-    except ValueError as ve:
-        return jsonify({"error": str(ve)}), 400
-    except Exception as e:
-        logging.error(f"Error in predict_performance: {str(e)}")
-        return jsonify({"error": "Internal Server Error"}), 500
+    if request.method == 'POST':
+        try:
+            data = request.form
+            predicted_performance = predict_performance(data)
+            return render_template('predict_performance.html', prediction=predicted_performance)
+        except ValueError as ve:
+            return render_template('predict_performance.html', error=str(ve))
+        except Exception as e:
+            logging.error(f"Error in predict_performance: {str(e)}")
+            return render_template('predict_performance.html', error="Internal Server Error")
+    return render_template('predict_performance.html')
 
-@app.route('/form_team', methods=['POST'])
+@app.route('/form_team', methods=['GET', 'POST'])
 def form_team_route():
-    try:
-        data = request.json
-        if 'team_size' not in data or 'required_skills' not in data:
-            raise ValueError('Missing required fields: team_size and required_skills')
-        optimal_team = form_optimal_team(data["team_size"], data["required_skills"])
-        return jsonify({'optimal_team': optimal_team})
-    except ValueError as ve:
-        return jsonify({"error": str(ve)}), 400
-    except Exception as e:
-        logging.error(f"Error in form_team: {str(e)}")
-        return jsonify({"error": "Internal Server Error"}), 500
+    if request.method == 'POST':
+        try:
+            data = request.form
+            team_size = int(data.get('team_size', 0))
+            required_skills = data.get('required_skills', '').split(',')
+            optimal_team = form_optimal_team(team_size, required_skills)
+            return render_template('form_team.html', team=optimal_team)
+        except ValueError as ve:
+            return render_template('form_team.html', error=str(ve))
+        except Exception as e:
+            logging.error(f"Error in form_team: {str(e)}")
+            return render_template('form_team.html', error="Internal Server Error")
+    return render_template('form_team.html')
 
 if __name__ == '__main__':
     app.run(host=config.HOST, port=config.PORT)

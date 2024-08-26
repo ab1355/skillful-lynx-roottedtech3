@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predict Performance</title>
+</head>
+<body>
+    <h1>Predict Performance</h1>
+    <form method="POST">
+        <label for="performance_score">Current Performance Score:</label>
+        <input type="number" id="performance_score" name="performance_score" step="0.01" required><br><br>
+        <label for="years_at_company">Years at Company:</label>
+        <input type="number" id="years_at_company" name="years_at_company" required><br><br>
+        <input type="submit" value="Predict">
+    </form>
+    {% if prediction %}
+        <h2>Predicted Performance: {{ prediction }}</h2>
+    {% endif %}
+    {% if error %}
+        <p style="color: red;">Error: {{ error }}</p>
+    {% endif %}
+    <br>
+    <a href="/">Back to Home</a>
+</body>
+</html>
