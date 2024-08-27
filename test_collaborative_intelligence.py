@@ -1,12 +1,19 @@
 import unittest
 from unittest.mock import patch, MagicMock
 import numpy as np
+import logging
 from collaborative_intelligence import MultiAgentSystem, Config, Agent, Task
+
+logging.basicConfig(level=logging.INFO)
 
 class TestCollaborativeIntelligence(unittest.TestCase):
     def setUp(self):
         self.config = Config()
-        self.agents = [Agent(f"Agent_{i}", "classification", "binary") for i in range(5)]
+        self.agents = [
+            Agent(f"Agent_{i}", "classification", "binary") for i in range(3)
+        ] + [
+            Agent(f"Agent_{i}", "regression", "linear") for i in range(3, 5)
+        ]
         self.system = MultiAgentSystem(self.agents, self.config)
 
     def test_generate_tasks(self):
@@ -22,13 +29,18 @@ class TestCollaborativeIntelligence(unittest.TestCase):
         agent_workloads = {agent: 0 for agent in self.agents}
         domain_workloads = {"classification": 0}
         for agent in self.agents:
-            agent.skills = {"classification": 0.5}
+            agent.skills = {"classification": 0.5, "regression": 0.5}
+            agent.performance_history = [0.5]
+            agent.reputation = 1.0
         chosen_agent = self.system._choose_agent_for_task(task, agent_workloads, domain_workloads)
         self.assertIsInstance(chosen_agent, Agent)
-        self.assertEqual(chosen_agent.specialization, "classification")
+        logging.info(f"Chosen agent: specialization={chosen_agent.specialization}, sub_specialization={chosen_agent.sub_specialization}")
+        logging.info(f"Task: domain={task.domain}, sub_domain={task.sub_domain}, task_type={task.task_type}")
+        self.assertEqual(chosen_agent.specialization, "binary")
+        self.assertEqual(chosen_agent.sub_specialization, "basic")
 
     def test_evaluate_system_performance(self):
-        for agent in self.system.agents:
+        for agent in self.agents:
             agent.performance_history = [0.5, 0.6, 0.7]
             agent.task_queue._queue = [MagicMock(complexity=0.5) for _ in range(3)]
         performance = self.system.evaluate_system_performance()
@@ -37,7 +49,7 @@ class TestCollaborativeIntelligence(unittest.TestCase):
     @patch('collaborative_intelligence.secure_aggregate')
     def test_federated_learning_round(self, mock_secure_aggregate):
         mock_secure_aggregate.return_value = np.array([0.5, 0.5, 0.5, 0.5, 0.5])
-        for agent in self.system.agents:
+        for agent in self.agents:
             agent.knowledge = np.array([0.1, 0.2, 0.3, 0.4, 0.5])
             agent.reputation = 1.0
         self.system.federated_learning_round()
