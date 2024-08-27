@@ -1,46 +1,68 @@
-from collaborative_intelligence import Agent, MultiAgentSystem
+import unittest
+from unittest.mock import patch, MagicMock
 import numpy as np
+from collaborative_intelligence_simple import LocalModel, GlobalModel, CollaborativeLearning
 
-def test_collaborative_intelligence_simple():
-    print("Testing Collaborative Intelligence Framework (Simple Version)")
+class TestCollaborativeIntelligenceSimple(unittest.TestCase):
+    def setUp(self):
+        self.local_model = LocalModel()
+        self.global_model = GlobalModel()
+        self.collaborative_learning = CollaborativeLearning(num_clients=3)
 
-    # Create agents
-    agents = [Agent(f"Agent_{i}", np.random.randn(10)) for i in range(3)]
-    mas = MultiAgentSystem(agents)
+    def test_local_model_train(self):
+        data = np.array([[1, 2], [3, 4]])
+        labels = np.array([0, 1])
+        self.local_model.train(data, labels)
+        self.assertIsNotNone(self.local_model.model)
 
-    print("\n1. Agent Creation:")
-    for agent in agents:
-        print(f"Created {agent.agent_id} with initial parameters: {agent.model_params}")
+    def test_local_model_predict(self):
+        self.local_model.model = MagicMock()
+        self.local_model.model.predict.return_value = np.array([0, 1])
+        data = np.array([[1, 2], [3, 4]])
+        predictions = self.local_model.predict(data)
+        self.assertEqual(predictions.tolist(), [0, 1])
 
-    print("\n2. Federated Learning:")
-    # Simulate local updates
-    for agent in agents:
-        agent.model_params += np.random.randn(10) * 0.1
-        print(f"{agent.agent_id} updated parameters: {agent.model_params}")
-    
-    # Perform federated learning
-    mas.federated_learning_round()
-    print("Federated learning round completed")
-    print(f"Updated parameters for all agents: {agents[0].model_params}")
+    def test_global_model_aggregate(self):
+        local_models = [LocalModel() for _ in range(3)]
+        for model in local_models:
+            model.model = MagicMock()
+            model.model.coef_ = np.array([1, 2])
+            model.model.intercept_ = np.array([0])
+        self.global_model.aggregate(local_models)
+        self.assertTrue(np.array_equal(self.global_model.model.coef_, np.array([1, 2])))
+        self.assertTrue(np.array_equal(self.global_model.model.intercept_, np.array([0])))
 
-    print("\n3. Knowledge Exchange:")
-    # Add some knowledge to agents
-    for i, agent in enumerate(agents):
-        agent.update_knowledge({f"key_{i}": f"value_{i}"})
-        print(f"{agent.agent_id} knowledge: {agent.knowledge_base}")
-    
-    # Simulate knowledge exchange
-    for i, agent in enumerate(agents):
-        next_agent = agents[(i + 1) % len(agents)]
-        knowledge = list(agent.knowledge_base.items())[0]
-        next_agent.update_knowledge({knowledge[0]: knowledge[1]})
-        print(f"{agent.agent_id} shared knowledge '{knowledge[0]}' with {next_agent.agent_id}")
+    def test_collaborative_learning_train(self):
+        data = [np.array([[1, 2], [3, 4]]) for _ in range(3)]
+        labels = [np.array([0, 1]) for _ in range(3)]
+        with patch.object(LocalModel, 'train'), patch.object(GlobalModel, 'aggregate'):
+            self.collaborative_learning.train(data, labels)
+            self.assertEqual(len(self.collaborative_learning.local_models), 3)
 
-    print("\nFinal knowledge state:")
-    for agent in agents:
-        print(f"{agent.agent_id} knowledge: {agent.knowledge_base}")
+    def test_collaborative_learning_predict(self):
+        self.collaborative_learning.global_model.model = MagicMock()
+        self.collaborative_learning.global_model.model.predict.return_value = np.array([0, 1])
+        data = np.array([[1, 2], [3, 4]])
+        predictions = self.collaborative_learning.predict(data)
+        self.assertEqual(predictions.tolist(), [0, 1])
 
-    print("\nCollaborative Intelligence test completed successfully!")
+    def test_empty_data(self):
+        data = [np.array([]) for _ in range(3)]
+        labels = [np.array([]) for _ in range(3)]
+        with self.assertRaises(ValueError):
+            self.collaborative_learning.train(data, labels)
 
-if __name__ == "__main__":
-    test_collaborative_intelligence_simple()
+    def test_mismatched_data_labels(self):
+        data = [np.array([[1, 2], [3, 4]]) for _ in range(3)]
+        labels = [np.array([0]) for _ in range(3)]
+        with self.assertRaises(ValueError):
+            self.collaborative_learning.train(data, labels)
+
+    def test_different_feature_dimensions(self):
+        data = [np.array([[1, 2], [3, 4]]), np.array([[1, 2, 3], [4, 5, 6]]), np.array([[1, 2], [3, 4]])]
+        labels = [np.array([0, 1]) for _ in range(3)]
+        with self.assertRaises(ValueError):
+            self.collaborative_learning.train(data, labels)
+
+if __name__ == '__main__':
+    unittest.main()

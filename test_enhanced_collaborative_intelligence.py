@@ -1,88 +1,90 @@
-import asyncio
-import matplotlib.pyplot as plt
-from collaborative_intelligence import MultiAgentSystem, Config
-from agent import Agent
-import logging
+import unittest
+from unittest.mock import patch, MagicMock
+import numpy as np
+from enhanced_collaborative_intelligence import EnhancedLocalModel, EnhancedGlobalModel, EnhancedCollaborativeLearning
 
-async def run_simulation(config_file=None):
-    config = Config(config_file)
+class TestEnhancedCollaborativeIntelligence(unittest.TestCase):
+    def setUp(self):
+        self.local_model = EnhancedLocalModel()
+        self.global_model = EnhancedGlobalModel()
+        self.collaborative_learning = EnhancedCollaborativeLearning(num_clients=3)
 
-    # Create initial agents
-    agents = [
-        Agent(f"Agent_{i}", "classification", "classification") for i in range(config.num_initial_agents // 3)
-    ] + [
-        Agent(f"Agent_{i+3}", "regression", "regression") for i in range(config.num_initial_agents // 3)
-    ] + [
-        Agent(f"Agent_{i+6}", "clustering", "clustering") for i in range(config.num_initial_agents // 3)
-    ]
+    def test_local_model_train(self):
+        data = np.array([[1, 2], [3, 4]])
+        labels = np.array([0, 1])
+        self.local_model.train(data, labels)
+        self.assertIsNotNone(self.local_model.model)
 
-    # Create MultiAgentSystem
-    mas = MultiAgentSystem(agents, config)
+    def test_local_model_predict(self):
+        self.local_model.model = MagicMock()
+        self.local_model.model.predict.return_value = np.array([0, 1])
+        data = np.array([[1, 2], [3, 4]])
+        predictions = self.local_model.predict(data)
+        self.assertEqual(predictions.tolist(), [0, 1])
 
-    # Run simulation
-    logging.info(f"Running simulation for {config.num_steps} steps...")
-    final_performance = await mas.run_simulation(config.num_steps)
+    def test_global_model_aggregate(self):
+        local_models = [EnhancedLocalModel() for _ in range(3)]
+        for model in local_models:
+            model.model = MagicMock()
+            model.model.coef_ = np.array([1, 2])
+            model.model.intercept_ = np.array([0])
+        self.global_model.aggregate(local_models)
+        self.assertTrue(np.array_equal(self.global_model.model.coef_, np.array([1, 2])))
+        self.assertTrue(np.array_equal(self.global_model.model.intercept_, np.array([0])))
 
-    # Get results
-    performance_history = mas.performance_history
-    workload_history = mas.workload_history
-    specialization_changes = mas.specialization_changes
-    long_term_performance = mas.long_term_performance
-    domain_performance = mas.domain_performance
+    def test_collaborative_learning_train(self):
+        data = [np.array([[1, 2], [3, 4]]) for _ in range(3)]
+        labels = [np.array([0, 1]) for _ in range(3)]
+        with patch.object(EnhancedLocalModel, 'train'), patch.object(EnhancedGlobalModel, 'aggregate'):
+            self.collaborative_learning.train(data, labels)
+            self.assertEqual(len(self.collaborative_learning.local_models), 3)
 
-    # Visualize results
-    visualize_results(performance_history, workload_history, specialization_changes, long_term_performance, domain_performance)
+    def test_collaborative_learning_predict(self):
+        self.collaborative_learning.global_model.model = MagicMock()
+        self.collaborative_learning.global_model.model.predict.return_value = np.array([0, 1])
+        data = np.array([[1, 2], [3, 4]])
+        predictions = self.collaborative_learning.predict(data)
+        self.assertEqual(predictions.tolist(), [0, 1])
 
-    logging.info(f"Final system performance: {final_performance}")
-    logging.info(f"Number of specialization changes: {len(specialization_changes)}")
-    logging.info(f"Final number of agents: {len(mas.agents)}")
+    def test_federated_learning(self):
+        data = [np.array([[1, 2], [3, 4]]) for _ in range(3)]
+        labels = [np.array([0, 1]) for _ in range(3)]
+        with patch.object(EnhancedLocalModel, 'train'), patch.object(EnhancedGlobalModel, 'aggregate'):
+            self.collaborative_learning.federated_learning(data, labels)
+            self.assertEqual(len(self.collaborative_learning.local_models), 3)
 
-def visualize_results(performance_history, workload_history, specialization_changes, long_term_performance, domain_performance):
-    plt.figure(figsize=(15, 10))
+    def test_secure_aggregation(self):
+        local_models = [EnhancedLocalModel() for _ in range(3)]
+        for model in local_models:
+            model.model = MagicMock()
+            model.model.coef_ = np.array([1, 2])
+            model.model.intercept_ = np.array([0])
+        with patch('enhanced_collaborative_intelligence.secure_aggregate') as mock_secure_aggregate:
+            mock_secure_aggregate.return_value = np.array([1, 2])
+            self.global_model.secure_aggregate(local_models)
+            mock_secure_aggregate.assert_called_once()
 
-    # System Performance
-    plt.subplot(2, 2, 1)
-    plt.plot(performance_history)
-    plt.title("System Performance Over Time")
-    plt.xlabel("Time Step")
-    plt.ylabel("Performance")
+    def test_differential_privacy(self):
+        data = np.array([[1, 2], [3, 4]])
+        labels = np.array([0, 1])
+        with patch('enhanced_collaborative_intelligence.DifferentialPrivacy') as mock_dp:
+            mock_dp_instance = MagicMock()
+            mock_dp.return_value = mock_dp_instance
+            mock_dp_instance.add_noise.return_value = data
+            self.local_model.train_with_differential_privacy(data, labels)
+            mock_dp_instance.add_noise.assert_called_once()
 
-    # Domain Performance
-    plt.subplot(2, 2, 2)
-    for domain, perf in domain_performance.items():
-        plt.plot(perf, label=domain)
-    plt.title("Domain Performance Over Time")
-    plt.xlabel("Time Step")
-    plt.ylabel("Performance")
-    plt.legend()
+    def test_empty_data(self):
+        data = [np.array([]) for _ in range(3)]
+        labels = [np.array([]) for _ in range(3)]
+        with self.assertRaises(ValueError):
+            self.collaborative_learning.train(data, labels)
 
-    # Workload History
-    plt.subplot(2, 2, 3)
-    plt.plot(workload_history)
-    plt.title("System Workload Over Time")
-    plt.xlabel("Time Step")
-    plt.ylabel("Workload")
+    def test_mismatched_data_labels(self):
+        data = [np.array([[1, 2], [3, 4]]) for _ in range(3)]
+        labels = [np.array([0]) for _ in range(3)]
+        with self.assertRaises(ValueError):
+            self.collaborative_learning.train(data, labels)
 
-    # Long-term Performance
-    plt.subplot(2, 2, 4)
-    plt.plot(long_term_performance)
-    plt.title("Long-term System Performance")
-    plt.xlabel("Time Step")
-    plt.ylabel("Performance Trend")
-
-    plt.tight_layout()
-    plt.savefig("system_performance_visualization.png")
-    plt.close()
-
-    # Specialization Changes
-    plt.figure(figsize=(12, 6))
-    for change in specialization_changes:
-        plt.plot([change[0], change[0]], [0, 1], 'r-')
-    plt.title("Agent Specialization Changes")
-    plt.xlabel("Time Step")
-    plt.yticks([])
-    plt.savefig("specialization_changes.png")
-    plt.close()
-
-if __name__ == "__main__":
-    asyncio.run(run_simulation())
+if __name__ == '__main__':
+    unittest.main()
