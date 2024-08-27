@@ -28,9 +28,9 @@ async def test_enhanced_collaborative_intelligence():
         print(f"{agent.agent_id} reputation: {agent.reputation:.2f}")
 
     print("\n2. Extended Simulation:")
-    num_steps = 200  # Increased simulation steps
+    num_steps = 300  # Increased simulation steps
     for step in range(num_steps):
-        if step % 20 == 0:
+        if step % 30 == 0:
             print(f"Step {step}/{num_steps}")
         await mas.run_simulation(1)
     final_performance = mas.evaluate_system_performance()
@@ -43,6 +43,10 @@ async def test_enhanced_collaborative_intelligence():
         print(f"{agent.agent_id} final specialization: {agent.specialization}")
         print(f"  Specialization strength: {agent.specialization_strength:.2f}")
         print(f"  Expertise levels: {agent.expertise_level}")
+        if agent.mentor:
+            print(f"  Mentor: {agent.mentor.agent_id}")
+        if agent.mentee:
+            print(f"  Mentee: {agent.mentee.agent_id}")
 
     print("\n4. Knowledge Sharing Statistics:")
     for agent in mas.agents:
@@ -109,7 +113,19 @@ async def test_enhanced_collaborative_intelligence():
     plt.savefig("long_term_performance.png")
     print("Long-term performance graph saved as 'long_term_performance.png'")
 
-    print("\n12. Final Performance Thresholds:")
+    print("\n12. Domain Performance:")
+    domain_performance = mas.get_domain_performance()
+    plt.figure(figsize=(12, 6))
+    for domain, performance in domain_performance.items():
+        plt.plot(performance, label=domain)
+    plt.title("Domain Performance Over Time")
+    plt.xlabel("Evaluation Interval")
+    plt.ylabel("Average Performance")
+    plt.legend()
+    plt.savefig("domain_performance.png")
+    print("Domain performance graph saved as 'domain_performance.png'")
+
+    print("\n13. Final Performance Thresholds:")
     print(f"Add agent threshold: {mas.add_agent_threshold:.2f}")
     print(f"Remove agent threshold: {mas.remove_agent_threshold:.2f}")
 
