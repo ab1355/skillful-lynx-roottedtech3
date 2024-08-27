@@ -1,4 +1,4 @@
-app = "agentzero-staging"
+app = "system32-long-surf-1343"
 primary_region = "iad"
 
 [build]
