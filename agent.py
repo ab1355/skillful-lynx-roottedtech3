@@ -1,124 +1,69 @@
-import random
 import asyncio
-from collections import defaultdict
-from typing import Dict, Any, Tuple
 import numpy as np
+from typing import List, Dict, Any
 from task import Task
-from models import create_model
+from models import SpecializedModel, create_model
 
 class Agent:
-    def __init__(self, agent_id: str, model_type: str, specialization: str):
-        self.agent_id = agent_id
+    def __init__(self, name: str, model_type: str, specialization: str):
+        self.name = name
         self.model = create_model(model_type)
         self.specialization = specialization
-        self.knowledge_base = {}
         self.task_queue = asyncio.Queue()
-        self.reputation = 1.0
-        self.task_history = []
-        self.last_knowledge_share = 0
-        self.last_information_request = 0
-        self.performance_by_task_type = defaultdict(lambda: {'success': 0, 'total': 0})
+        self.knowledge = np.random.rand(100)
+        self.performance_history = []
+        self.learning_rate = 0.1
+        self.exploration_rate = 0.1
+        self.task_preferences = {'classification': 0, 'regression': 0, 'clustering': 0}
         self.creation_time = 0
-        self.specialization_change_cooldown = 0
-        self.total_tasks_processed = 0
-        self.specialization_strength = 1.0
-        self.knowledge_specialization = defaultdict(float)
-        self.expertise_level = {
-            "classification": 1,
-            "regression": 1,
-            "clustering": 1
-        }
-        self.mentors = []
-        self.mentees = []
-        self.mentoring_impact = defaultdict(list)
-        self.ramp_up_boost = 1.0
-        self.utilization_score = 1.0
-        self.long_term_performance = []
-        self.domain_specific_expertise = {domain: 1.0 for domain in ["classification", "regression", "clustering"]}
+        self.utilization_score = 0
 
-    async def process_task(self, task: Task) -> Tuple[str, float]:
-        processing_time = task.complexity * (1 / (self.reputation * self.ramp_up_boost)) * (1 / self.expertise_level[task.domain])
-        await asyncio.sleep(processing_time)
-        success_probability = min(1.0, (self.reputation * self.ramp_up_boost * self.specialization_strength * self.expertise_level[task.domain]) / task.complexity)
-        success = random.random() < success_probability
-        result = 1.0 if success else 0.0
-        self.task_history.append((task.task_id, result))
-        self.performance_by_task_type[task.domain]['success'] += result
-        self.performance_by_task_type[task.domain]['total'] += 1
-        self.total_tasks_processed += 1
+    def process_task(self, task: Task) -> float:
+        task_vector = np.random.rand(100)  # Simplified task representation
+        similarity = np.dot(self.knowledge, task_vector) / (np.linalg.norm(self.knowledge) * np.linalg.norm(task_vector))
+        performance = similarity * (1 - np.exp(-self.model.complexity / task.complexity))
         
-        if success:
-            self.generate_knowledge(task)
-            self.update_specialization_strength(task.domain, 0.1)
-            self.increase_domain_expertise(task.domain, 0.1)
-        else:
-            self.update_specialization_strength(task.domain, -0.05)
+        self.performance_history.append(performance)
+        self.update_task_preferences(task.domain, performance)
         
-        return task.task_id, result
+        return performance
 
-    def generate_knowledge(self, task: Task):
-        knowledge_key = f"{task.domain}_technique_{random.randint(1, 100)}"
-        confidence = random.uniform(0.6, 1.0) * self.expertise_level[task.domain]
-        self.knowledge_base[knowledge_key] = {
-            'content': f"Learned technique for {task.domain} tasks",
-            'confidence': confidence,
-            'domain': task.domain
-        }
-        self.knowledge_specialization[task.domain] += 0.1
+    def update_knowledge(self, task: Task, performance: float):
+        task_vector = np.random.rand(100)  # Simplified task representation
+        self.knowledge += self.learning_rate * performance * task_vector
+        self.knowledge /= np.linalg.norm(self.knowledge)
 
-    def update_specialization_strength(self, domain: str, change: float):
-        if domain == self.specialization:
-            self.specialization_strength = max(0.5, min(2.0, self.specialization_strength + change))
+    def update_task_preferences(self, task_domain: str, performance: float):
+        self.task_preferences[task_domain] = (1 - self.learning_rate) * self.task_preferences[task_domain] + self.learning_rate * performance
 
-    def get_domain_expertise(self, domain: str) -> float:
-        return self.domain_specific_expertise[domain]
-
-    def increase_domain_expertise(self, domain: str, amount: float):
-        self.domain_specific_expertise[domain] = min(10.0, self.domain_specific_expertise[domain] + amount)
-
-    def update_utilization_score(self, total_tasks: int):
-        if not self.performance_by_task_type:
-            self.utilization_score = 1.0  # Default to 1.0 if no tasks have been processed
+    def choose_task(self, available_tasks: List[Task]) -> Task:
+        if np.random.rand() < self.exploration_rate:
+            return np.random.choice(available_tasks)
         else:
-            expected_tasks = total_tasks / len(self.performance_by_task_type)
-            actual_tasks = self.total_tasks_processed
-            self.utilization_score = min(2.0, max(0.5, actual_tasks / max(1, expected_tasks)))
+            return max(available_tasks, key=lambda t: self.task_preferences[t.domain])
 
-    def decay_ramp_up_boost(self):
-        self.ramp_up_boost = max(1.0, self.ramp_up_boost * 0.95)
+    def adapt_specialization(self):
+        if np.random.rand() < self.exploration_rate:
+            self.specialization = np.random.choice(['classification', 'regression', 'clustering'])
+        else:
+            self.specialization = max(self.task_preferences, key=self.task_preferences.get)
 
-    def update_long_term_performance(self, performance: float):
-        self.long_term_performance.append(performance)
-        if len(self.long_term_performance) > 50:
-            self.long_term_performance.pop(0)
+    def get_state(self) -> Dict[str, Any]:
+        return {
+            'name': self.name,
+            'specialization': self.specialization,
+            'knowledge': self.knowledge.tolist(),
+            'performance_history': self.performance_history,
+            'task_preferences': self.task_preferences,
+            'creation_time': self.creation_time,
+            'utilization_score': self.utilization_score
+        }
 
-    def get_parameters(self) -> Dict[str, np.ndarray]:
-        return self.model.get_parameters()
-
-    def set_parameters(self, parameters: Dict[str, np.ndarray]):
-        self.model.set_parameters(parameters)
-
-    def should_share_knowledge(self, current_time: int) -> bool:
-        return current_time - self.last_knowledge_share >= 5
-
-    def should_request_information(self, current_time: int) -> bool:
-        return current_time - self.last_information_request >= 7
-
-    def decide_knowledge_to_share(self) -> Dict[str, Any]:
-        specialized_knowledge = {k: v for k, v in self.knowledge_base.items() 
-                                 if v.get('confidence', 0) > 0.6 and v['domain'] == self.specialization}
-        return specialized_knowledge
-
-    def get_performance_difference(self) -> float:
-        if len(self.performance_by_task_type) < 2:
-            return 0
-        performances = [perf['success'] / max(1, perf['total']) for perf in self.performance_by_task_type.values()]
-        return max(performances) - min(performances)
-
-    def update_knowledge(self, new_knowledge: Dict[str, Any]):
-        for key, value in new_knowledge.items():
-            if key not in self.knowledge_base or value['confidence'] > self.knowledge_base[key]['confidence']:
-                self.knowledge_base[key] = value
-                self.knowledge_specialization[value['domain']] += 0.05
-
-    # ... (other methods remain the same)
+    def load_state(self, state: Dict[str, Any]):
+        self.name = state['name']
+        self.specialization = state['specialization']
+        self.knowledge = np.array(state['knowledge'])
+        self.performance_history = state['performance_history']
+        self.task_preferences = state['task_preferences']
+        self.creation_time = state['creation_time']
+        self.utilization_score = state['utilization_score']

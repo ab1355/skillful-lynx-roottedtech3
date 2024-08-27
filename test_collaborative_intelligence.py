@@ -1,38 +1,50 @@
+import unittest
 import asyncio
-from collaborative_intelligence import Agent, MultiAgentSystem
-import numpy as np
+from collaborative_intelligence import MultiAgentSystem, Config
+from agent import Agent
+from task import Task
 
-async def test_collaborative_intelligence():
-    print("Testing Collaborative Intelligence Framework")
+class TestCollaborativeIntelligence(unittest.TestCase):
+    def setUp(self):
+        self.config = Config()
+        self.agents = [
+            Agent("Agent_1", "classification", "classification"),
+            Agent("Agent_2", "regression", "regression"),
+            Agent("Agent_3", "clustering", "clustering")
+        ]
+        self.mas = MultiAgentSystem(self.agents, self.config)
 
-    # Create agents
-    agents = [Agent(f"Agent_{i}", np.random.randn(10)) for i in range(3)]
-    mas = MultiAgentSystem(agents)
+    def test_agent_creation(self):
+        self.assertEqual(len(self.mas.agents), 3)
+        self.assertEqual(self.mas.agents[0].name, "Agent_1")
+        self.assertEqual(self.mas.agents[1].specialization, "regression")
 
-    # Simulate tasks
-    tasks = [{"id": i, "data": np.random.randn(10)} for i in range(5)]
+    def test_task_allocation(self):
+        tasks = [
+            Task("Task_1", 0.5, "classification"),
+            Task("Task_2", 0.7, "regression"),
+            Task("Task_3", 0.9, "clustering")
+        ]
+        asyncio.run(self.mas.allocate_tasks(tasks))
+        self.assertEqual(len(self.mas.agents[0].task_queue._queue), 1)
+        self.assertEqual(len(self.mas.agents[1].task_queue._queue), 1)
+        self.assertEqual(len(self.mas.agents[2].task_queue._queue), 1)
 
-    print("\n1. Task Coordination:")
-    await mas.coordinate_tasks(tasks)
+    def test_federated_learning(self):
+        initial_knowledge = self.mas.agents[0].knowledge
+        self.mas.federated_learning_round()
+        self.assertNotEqual(initial_knowledge, self.mas.agents[0].knowledge)
 
-    print("\n2. Federated Learning:")
-    # Simulate local updates
-    for agent in agents:
-        agent.model_params += np.random.randn(10) * 0.1
-    
-    # Perform federated learning
-    mas.federated_learning_round()
-    print("Federated learning round completed")
+    def test_collaborative_exchange(self):
+        initial_knowledge = self.mas.agents[0].knowledge
+        asyncio.run(self.mas.collaborative_exchange())
+        self.assertNotEqual(initial_knowledge, self.mas.agents[0].knowledge)
 
-    print("\n3. Collaborative Exchange:")
-    # Add some knowledge to agents
-    for i, agent in enumerate(agents):
-        agent.update_knowledge({f"key_{i}": f"value_{i}"})
-    
-    # Perform collaborative exchange
-    await mas.collaborative_exchange()
+    def test_agent_specialization_adjustment(self):
+        initial_specialization = self.mas.agents[0].specialization
+        self.mas._adjust_agent_specializations()
+        # This test might fail sometimes due to randomness
+        self.assertEqual(initial_specialization, self.mas.agents[0].specialization)
 
-    print("\nCollaborative Intelligence test completed successfully!")
-
-if __name__ == "__main__":
-    asyncio.run(test_collaborative_intelligence())
+if __name__ == '__main__':
+    unittest.main()
