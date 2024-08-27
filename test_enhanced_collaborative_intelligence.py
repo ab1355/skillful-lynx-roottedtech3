@@ -28,9 +28,9 @@ async def test_enhanced_collaborative_intelligence():
         print(f"{agent.agent_id} reputation: {agent.reputation:.2f}")
 
     print("\n2. Extended Simulation:")
-    num_steps = 500  # Increased simulation steps
+    num_steps = 1000  # Increased simulation steps
     for step in range(num_steps):
-        if step % 50 == 0:
+        if step % 100 == 0:
             print(f"Step {step}/{num_steps}")
         await mas.run_simulation(1)
     final_performance = mas.evaluate_system_performance()
@@ -43,6 +43,7 @@ async def test_enhanced_collaborative_intelligence():
         print(f"{agent.agent_id} final specialization: {agent.specialization}")
         print(f"  Specialization strength: {agent.specialization_strength:.2f}")
         print(f"  Expertise levels: {agent.expertise_level}")
+        print(f"  Ramp-up boost: {agent.ramp_up_boost:.2f}")
         if agent.mentor:
             print(f"  Mentor: {agent.mentor.agent_id}")
         if agent.mentee:

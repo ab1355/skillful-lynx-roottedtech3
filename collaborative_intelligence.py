@@ -32,11 +32,12 @@ class Agent:
         self.mentor = None
         self.mentee = None
         self.mentoring_impact = defaultdict(list)  # Track impact of mentoring
+        self.ramp_up_boost = 1.0  # Temporary boost for new agents
 
     async def process_task(self, task: Task) -> Tuple[str, float]:
-        processing_time = task.complexity * (1 / self.reputation) * (1 / self.expertise_level[task.domain])
+        processing_time = task.complexity * (1 / (self.reputation * self.ramp_up_boost)) * (1 / self.expertise_level[task.domain])
         await asyncio.sleep(processing_time)
-        success_probability = min(1.0, (self.reputation * self.specialization_strength * self.expertise_level[task.domain]) / task.complexity)
+        success_probability = min(1.0, (self.reputation * self.ramp_up_boost * self.specialization_strength * self.expertise_level[task.domain]) / task.complexity)
         success = random.random() < success_probability
         result = 1.0 if success else 0.0
         self.task_history.append((task.task_id, result))
@@ -106,10 +107,13 @@ class Agent:
         self.expertise_level[domain] = min(10, self.expertise_level[domain] + 0.1)
         if self.mentee:
             mentee_old_expertise = self.mentee.expertise_level[domain]
-            self.mentee.expertise_level[domain] = min(self.mentee.expertise_level[domain] + 0.05, self.expertise_level[domain])
-            mentee_expertise_gain = self.mentee.expertise_level[domain] - mentee_old_expertise
+            mentee_expertise_gain = max(0, min(self.mentee.expertise_level[domain] + 0.05, self.expertise_level[domain]) - mentee_old_expertise)
+            self.mentee.expertise_level[domain] += mentee_expertise_gain
             self.mentoring_impact[domain].append(mentee_expertise_gain)
         return self.expertise_level[domain] - old_expertise
+
+    def decay_ramp_up_boost(self):
+        self.ramp_up_boost = max(1.0, self.ramp_up_boost * 0.95)
 
 class MultiAgentSystem:
     def __init__(self, agents: List[Agent]):
@@ -157,7 +161,8 @@ class MultiAgentSystem:
             catch_up_score = 1 + max(0, (avg_workload - agent.total_tasks_processed) / avg_workload)
             domain_balance_score = domain_workloads[task.domain] / total_domain_workload if total_domain_workload > 0 else 1
             expertise_score = agent.expertise_level[task.domain]
-            total_score = performance_score * workload_score * specialization_score * warm_up_score * integration_score * catch_up_score * domain_balance_score * expertise_score
+            ramp_up_score = agent.ramp_up_boost
+            total_score = performance_score * workload_score * specialization_score * warm_up_score * integration_score * catch_up_score * domain_balance_score * expertise_score * ramp_up_score
             agent_scores.append((agent, total_score))
         chosen_agent = max(agent_scores, key=lambda x: x[1])[0]
         self.log.append(f"Time {self.current_time}: Chose {chosen_agent.agent_id} for task {task.task_id}")
@@ -184,6 +189,7 @@ class MultiAgentSystem:
         task_diversity = len(set(task_id for task_id, _ in agent.task_history[-20:]))
         knowledge_contribution = len(agent.knowledge_base) / 20
         agent.reputation = 0.5 * recent_performance + 0.3 * (task_diversity / 20) + 0.2 * knowledge_contribution
+        agent.decay_ramp_up_boost()
         self.log.append(f"Time {self.current_time}: Updated {agent.agent_id} reputation to {agent.reputation:.2f}")
 
     def federated_learning_round(self):
@@ -242,6 +248,7 @@ class MultiAgentSystem:
 
     def add_agent(self, agent: Agent):
         agent.creation_time = self.current_time
+        agent.ramp_up_boost = 2.0  # Start with a 2x boost
         self.agents.append(agent)
         self._assign_mentor(agent)
         self.log.append(f"Time {self.current_time}: Added new agent {agent.agent_id}")
@@ -332,14 +339,14 @@ class MultiAgentSystem:
             best_specialization = agent.get_best_specialization()
             if best_specialization != agent.specialization:
                 performance_diff = agent.get_performance_difference()
-                change_probability = min(1.0, performance_diff * 20)  # Increased sensitivity
+                change_probability = min(1.0, performance_diff * 25)  # Increased sensitivity further
                 if random.random() < change_probability:
                     self._remove_mentorship(agent)
                     self.log.append(f"Time {self.current_time}: {agent.agent_id} changed specialization from {agent.specialization} to {best_specialization}")
                     self.specialization_changes.append((self.current_time, agent.agent_id, agent.specialization, best_specialization))
                     agent.specialization = best_specialization
                     agent.specialization_strength = 1.0  # Reset specialization strength
-                    agent.specialization_change_cooldown = 3  # Reduced cooldown period
+                    agent.specialization_change_cooldown = 2  # Reduced cooldown period further
                     self._assign_mentor(agent)
 
     def _update_performance_thresholds(self):
@@ -399,6 +406,24 @@ class MultiAgentSystem:
                 if agent.mentor:
                     agent.expertise_level[domain] = min(10, (agent.expertise_level[domain] + agent.mentor.expertise_level[domain]) / 2)
 
+    def _system_wide_optimization(self):
+        domain_performances = defaultdict(list)
+        for agent in self.agents:
+            for domain, perf in agent.performance_by_task_type.items():
+                if perf['total'] > 0:
+                    domain_performances[domain].append((agent, perf['success'] / perf['total']))
+        
+        for domain, performances in domain_performances.items():
+            best_agents = sorted(performances, key=lambda x: x[1], reverse=True)[:3]
+            for agent, _ in best_agents:
+                if agent.specialization != domain:
+                    self._remove_mentorship(agent)
+                    self.log.append(f"Time {self.current_time}: Reassigned {agent.agent_id} from {agent.specialization} to {domain}")
+                    self.specialization_changes.append((self.current_time, agent.agent_id, agent.specialization, domain))
+                    agent.specialization = domain
+                    agent.specialization_strength = 1.5  # Give a boost to the new specialization
+                    self._assign_mentor(agent)
+
     async def run_simulation(self, num_steps: int):
         for _ in range(num_steps):
             self.current_time += 1
@@ -421,6 +446,9 @@ class MultiAgentSystem:
                 elif performance > self.add_agent_threshold and len(self.agents) < 10:
                     new_agent = Agent(f"Agent_{len(self.agents)+1}", random.choice(['classification', 'regression', 'clustering']), random.choice(['classification', 'regression', 'clustering']))
                     self.add_agent(new_agent)
+
+            if self.current_time % 50 == 0:
+                self._system_wide_optimization()
 
         return self.evaluate_system_performance()
 
