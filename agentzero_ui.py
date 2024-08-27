@@ -43,6 +43,7 @@ def chat():
     return render_template('chat.html')
 
 def generate_response(message):
+    logging.debug(f"Generating response for message: {message}")
     # More sophisticated response generation
     if 'performance' in message.lower():
         avg_performance = calculate_avg_performance(hr_data)
@@ -63,30 +64,20 @@ def generate_response(message):
 def handle_messages():
     logging.debug(f"Handling {request.method} request to /api/messages")
     if request.method == 'POST':
-        logging.debug(f"POST request data: {request.form}")
-        logging.debug(f"POST request files: {request.files}")
-        message = request.form.get('message')
-        file = request.files.get('file')
+        logging.debug(f"POST request data: {request.json}")
+        message = request.json.get('message')
         
         logging.debug(f"Received message: {message}")
-        if file:
-            logging.debug(f"Received file: {file.filename}")
         
         try:
-            if file and allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(file_path)
-                chat_messages.append({'text': message, 'file': filename, 'sender': 'user'})
-            else:
-                chat_messages.append({'text': message, 'sender': 'user'})
+            chat_messages.append({'text': message, 'sender': 'user'})
             
             # Generate and add response
             response = generate_response(message)
             chat_messages.append({'text': response, 'sender': 'bot'})
             
             logging.debug(f"Current chat messages: {chat_messages}")
-            return jsonify({'status': 'success'})
+            return jsonify({'status': 'success', 'response': response})
         except Exception as e:
             logging.error(f"Error processing message: {str(e)}")
             return jsonify({'status': 'error', 'message': str(e)}), 500

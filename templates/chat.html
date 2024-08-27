@@ -3,158 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AgentZero Chat</title>
+    <title>HR Data Analysis Chat</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-        }
         #chat-container {
-            flex-grow: 1;
-            overflow-y: auto;
+            width: 80%;
+            margin: 0 auto;
+            padding: 20px;
             border: 1px solid #ccc;
-            padding: 10px;
-            margin-bottom: 20px;
-        }
-        #message-form {
-            display: flex;
-            flex-direction: column;
-        }
-        #message-input {
-            margin-bottom: 10px;
-            padding: 10px;
-        }
-        #file-input {
-            margin-bottom: 10px;
-        }
-        button {
-            padding: 10px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        .message {
-            margin-bottom: 10px;
-            padding: 10px;
             border-radius: 5px;
         }
-        .message.user {
-            background-color: #f1f1f1;
-            text-align: right;
-        }
-        .message.bot {
-            background-color: #e1f5fe;
-            text-align: left;
-        }
-        .message img {
-            max-width: 200px;
-            max-height: 200px;
-        }
-        #debug-output {
-            margin-top: 20px;
-            border: 1px solid #ccc;
+        #chat-messages {
+            height: 300px;
+            overflow-y: scroll;
+            border: 1px solid #eee;
             padding: 10px;
-            background-color: #f9f9f9;
+            margin-bottom: 10px;
+        }
+        #user-input {
+            width: 80%;
+            padding: 5px;
+        }
+        #send-button {
+            padding: 5px 10px;
         }
     </style>
 </head>
 <body>
-    <h1>AgentZero Chat</h1>
-    <div id="chat-container"></div>
-    <form id="message-form">
-        <textarea id="message-input" rows="4" placeholder="Type your message here..."></textarea>
-        <input type="file" id="file-input">
-        <button type="submit">Send</button>
-    </form>
-    <div id="debug-output"></div>
+    <div id="chat-container">
+        <h1>HR Data Analysis Chat</h1>
+        <div id="chat-messages"></div>
+        <input type="text" id="user-input" placeholder="Type your message...">
+        <button id="send-button">Send</button>
+    </div>
 
     <script>
-        const chatContainer = document.getElementById('chat-container');
-        const messageForm = document.getElementById('message-form');
-        const messageInput = document.getElementById('message-input');
-        const fileInput = document.getElementById('file-input');
-        const debugOutput = document.getElementById('debug-output');
-
-        function debug(message) {
-            console.log(message);
-            debugOutput.innerHTML += message + '<br>';
-        }
-
-        function loadMessages() {
-            debug('Fetching messages...');
-            fetch('/api/messages')
-                .then(response => response.json())
-                .then(messages => {
-                    debug('Messages received: ' + JSON.stringify(messages));
-                    chatContainer.innerHTML = '';
-                    messages.forEach(message => {
-                        const messageElement = document.createElement('div');
-                        messageElement.className = `message ${message.sender}`;
-                        messageElement.textContent = message.text;
-                        if (message.file) {
-                            const fileElement = document.createElement('div');
-                            if (['jpg', 'jpeg', 'png', 'gif'].includes(message.file.split('.').pop().toLowerCase())) {
-                                const img = document.createElement('img');
-                                img.src = '/uploads/' + message.file;
-                                fileElement.appendChild(img);
-                            } else {
-                                const link = document.createElement('a');
-                                link.href = '/uploads/' + message.file;
-                                link.textContent = 'Download ' + message.file;
-                                fileElement.appendChild(link);
-                            }
-                            messageElement.appendChild(fileElement);
-                        }
-                        chatContainer.appendChild(messageElement);
-                    });
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
-                })
-                .catch(error => {
-                    debug('Error fetching messages: ' + error);
-                });
-        }
-
-        messageForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            debug('Sending message...');
-            const formData = new FormData();
-            formData.append('message', messageInput.value);
-            if (fileInput.files.length > 0) {
-                formData.append('file', fileInput.files[0]);
+        $(document).ready(function() {
+            function addMessage(message, sender) {
+                $('#chat-messages').append(`<p><strong>${sender}:</strong> ${message}</p>`);
+                $('#chat-messages').scrollTop($('#chat-messages')[0].scrollHeight);
             }
-            debug('FormData: ' + JSON.stringify(Object.fromEntries(formData)));
-            fetch('/api/messages', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                debug('Response status: ' + response.status);
-                return response.json();
-            })
-            .then(data => {
-                debug('Message sent, response: ' + JSON.stringify(data));
-                if (data.status === 'success') {
-                    messageInput.value = '';
-                    fileInput.value = '';
-                    loadMessages();
+
+            function sendMessage() {
+                var message = $('#user-input').val();
+                if (message) {
+                    console.log("Sending message:", message);
+                    addMessage(message, 'User');
+                    $.ajax({
+                        url: '/api/messages',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({ message: message }),
+                        success: function(data) {
+                            console.log("Received response:", data);
+                            if (data.status === 'success') {
+                                addMessage(data.response, 'Bot');
+                            } else {
+                                console.error("Error:", data.message);
+                                addMessage("Sorry, there was an error processing your request.", 'Bot');
+                            }
+                        },
+                        error: function(jqXHR, textStatus, errorThrown) {
+                            console.error("AJAX error:", textStatus, errorThrown);
+                            addMessage("Sorry, there was an error communicating with the server.", 'Bot');
+                        }
+                    });
+                    $('#user-input').val('');
                 }
-            })
-            .catch(error => {
-                debug('Error sending message: ' + error);
+            }
+
+            $('#send-button').click(sendMessage);
+            $('#user-input').keypress(function(e) {
+                if (e.which == 13) {
+                    sendMessage();
+                    return false;
+                }
             });
         });
-
-        // Load messages initially and every 5 seconds
-        loadMessages();
-        setInterval(loadMessages, 5000);
     </script>
 </body>
 </html>
