@@ -16,8 +16,10 @@ async def run_simulation():
     # Create MultiAgentSystem
     mas = MultiAgentSystem(agents)
 
-    # Run simulation
-    final_performance = await mas.run_simulation(1000)
+    # Run simulation for fewer steps
+    num_steps = 100
+    print(f"Running simulation for {num_steps} steps...")
+    final_performance = await mas.run_simulation(num_steps)
 
     # Get results
     performance_history = mas.get_performance_history()

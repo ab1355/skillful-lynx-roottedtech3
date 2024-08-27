@@ -109,4 +109,16 @@ class Agent:
                                  if v.get('confidence', 0) > 0.6 and v['domain'] == self.specialization}
         return specialized_knowledge
 
+    def get_performance_difference(self) -> float:
+        if len(self.performance_by_task_type) < 2:
+            return 0
+        performances = [perf['success'] / max(1, perf['total']) for perf in self.performance_by_task_type.values()]
+        return max(performances) - min(performances)
+
+    def update_knowledge(self, new_knowledge: Dict[str, Any]):
+        for key, value in new_knowledge.items():
+            if key not in self.knowledge_base or value['confidence'] > self.knowledge_base[key]['confidence']:
+                self.knowledge_base[key] = value
+                self.knowledge_specialization[value['domain']] += 0.05
+
     # ... (other methods remain the same)
