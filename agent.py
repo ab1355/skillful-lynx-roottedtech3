@@ -1,69 +1,84 @@
-import asyncio
 import numpy as np
-from typing import List, Dict, Any
+import asyncio
+from typing import List, Dict
 from task import Task
-from models import SpecializedModel, create_model
+import random
+import logging
 
 class Agent:
-    def __init__(self, name: str, model_type: str, specialization: str):
-        self.name = name
-        self.model = create_model(model_type)
-        self.specialization = specialization
+    def __init__(self, agent_id: str, primary_domain: str, initial_specialization: str):
+        self.id = agent_id
+        self.primary_domain = primary_domain
+        self.specialization = initial_specialization
+        self.sub_specialization = random.choice(["basic", "intermediate", "advanced"])
         self.task_queue = asyncio.Queue()
-        self.knowledge = np.random.rand(100)
         self.performance_history = []
-        self.learning_rate = 0.1
-        self.exploration_rate = 0.1
-        self.task_preferences = {'classification': 0, 'regression': 0, 'clustering': 0}
         self.creation_time = 0
-        self.utilization_score = 0
+        self.learning_rate = 0.1
+        self.knowledge = self._initialize_knowledge()
+        self.learning_strategy = self._choose_learning_strategy()
+        self.experience = 0
+
+    def _initialize_knowledge(self):
+        # Knowledge representation: 3D tensor (domain, sub-domain, aspect)
+        domains = ["classification", "regression", "clustering"]
+        sub_domains = ["basic", "intermediate", "advanced"]
+        aspects = ["theory", "implementation", "optimization"]
+        return np.random.rand(len(domains), len(sub_domains), len(aspects)) * 0.1  # Start with low knowledge
+
+    def _choose_learning_strategy(self):
+        strategies = ["gradient_descent", "reinforcement", "evolutionary"]
+        return random.choice(strategies)
 
     def process_task(self, task: Task) -> float:
-        task_vector = np.random.rand(100)  # Simplified task representation
-        similarity = np.dot(self.knowledge, task_vector) / (np.linalg.norm(self.knowledge) * np.linalg.norm(task_vector))
-        performance = similarity * (1 - np.exp(-self.model.complexity / task.complexity))
-        
-        self.performance_history.append(performance)
-        self.update_task_preferences(task.domain, performance)
-        
-        return performance
+        domain_index = ["classification", "regression", "clustering"].index(task.domain)
+        sub_domain_index = ["basic", "intermediate", "advanced"].index(task.sub_domain)
+        relevant_knowledge = self.knowledge[domain_index, sub_domain_index, :]
+        performance = np.mean(relevant_knowledge) * (1 - np.exp(-task.complexity))
+        self.experience += 1
+        result = min(1.0, max(0.0, performance + np.random.normal(0, 0.05)))
+        logging.info(f"Agent {self.id} processed task {task.id} with performance {result:.4f}")
+        return result
 
     def update_knowledge(self, task: Task, performance: float):
-        task_vector = np.random.rand(100)  # Simplified task representation
-        self.knowledge += self.learning_rate * performance * task_vector
-        self.knowledge /= np.linalg.norm(self.knowledge)
+        domain_index = ["classification", "regression", "clustering"].index(task.domain)
+        sub_domain_index = ["basic", "intermediate", "advanced"].index(task.sub_domain)
+        
+        learning_factor = 1 / (1 + np.exp(-self.experience / 100))  # Sigmoid function for gradual learning
+        
+        if self.learning_strategy == "gradient_descent":
+            gradient = performance - np.mean(self.knowledge[domain_index, sub_domain_index, :])
+            self.knowledge[domain_index, sub_domain_index, :] += self.learning_rate * gradient * learning_factor
+        elif self.learning_strategy == "reinforcement":
+            reward = performance - 0.5  # Assuming 0.5 as baseline performance
+            self.knowledge[domain_index, sub_domain_index, :] += self.learning_rate * reward * learning_factor
+        elif self.learning_strategy == "evolutionary":
+            mutation = np.random.normal(0, 0.1, size=self.knowledge[domain_index, sub_domain_index, :].shape)
+            self.knowledge[domain_index, sub_domain_index, :] += self.learning_rate * mutation * learning_factor
 
-    def update_task_preferences(self, task_domain: str, performance: float):
-        self.task_preferences[task_domain] = (1 - self.learning_rate) * self.task_preferences[task_domain] + self.learning_rate * performance
-
-    def choose_task(self, available_tasks: List[Task]) -> Task:
-        if np.random.rand() < self.exploration_rate:
-            return np.random.choice(available_tasks)
-        else:
-            return max(available_tasks, key=lambda t: self.task_preferences[t.domain])
+        self.knowledge = np.clip(self.knowledge, 0, 1)
+        logging.info(f"Agent {self.id} updated knowledge for domain {task.domain}, sub-domain {task.sub_domain}")
 
     def adapt_specialization(self):
-        if np.random.rand() < self.exploration_rate:
-            self.specialization = np.random.choice(['classification', 'regression', 'clustering'])
-        else:
-            self.specialization = max(self.task_preferences, key=self.task_preferences.get)
+        domain_performance = np.mean(self.knowledge, axis=(1, 2))
+        new_specialization = ["classification", "regression", "clustering"][np.argmax(domain_performance)]
+        
+        sub_domain_performance = np.mean(self.knowledge[["classification", "regression", "clustering"].index(new_specialization)], axis=1)
+        new_sub_specialization = ["basic", "intermediate", "advanced"][np.argmax(sub_domain_performance)]
 
-    def get_state(self) -> Dict[str, Any]:
-        return {
-            'name': self.name,
-            'specialization': self.specialization,
-            'knowledge': self.knowledge.tolist(),
-            'performance_history': self.performance_history,
-            'task_preferences': self.task_preferences,
-            'creation_time': self.creation_time,
-            'utilization_score': self.utilization_score
-        }
+        if new_specialization != self.specialization or new_sub_specialization != self.sub_specialization:
+            logging.info(f"Agent {self.id} changed specialization from {self.specialization}/{self.sub_specialization} to {new_specialization}/{new_sub_specialization}")
+            self.specialization = new_specialization
+            self.sub_specialization = new_sub_specialization
 
-    def load_state(self, state: Dict[str, Any]):
-        self.name = state['name']
-        self.specialization = state['specialization']
-        self.knowledge = np.array(state['knowledge'])
-        self.performance_history = state['performance_history']
-        self.task_preferences = state['task_preferences']
-        self.creation_time = state['creation_time']
-        self.utilization_score = state['utilization_score']
+    def adapt_learning_strategy(self):
+        if len(self.performance_history) < 10:
+            return
+
+        recent_performance = self.performance_history[-10:]
+        if np.mean(recent_performance[:5]) > np.mean(recent_performance[5:]):
+            strategies = ["gradient_descent", "reinforcement", "evolutionary"]
+            strategies.remove(self.learning_strategy)
+            new_strategy = random.choice(strategies)
+            logging.info(f"Agent {self.id} changed learning strategy from {self.learning_strategy} to {new_strategy}")
+            self.learning_strategy = new_strategy
