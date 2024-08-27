@@ -1,0 +1,1 @@
+{"num_initial_agents": 9, "num_steps": 500, "task_complexity_range": [0.3, 1.5], "tasks_per_step": 5, "add_agent_threshold": 0.75, "remove_agent_threshold": 0.4, "task_complexity_adjustment_rate": 0.01, "epsilon": 0.5}
