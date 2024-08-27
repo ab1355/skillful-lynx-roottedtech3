@@ -17,7 +17,7 @@ async def test_enhanced_collaborative_intelligence():
 
     # Simulate initial tasks
     task_types = ["classification", "regression", "clustering"]
-    tasks = [Task(f"Task_{i}", random.uniform(0.3, 0.9), random.choice(task_types)) for i in range(50)]
+    tasks = [Task(f"Task_{i}", random.uniform(0.3, 1.5), random.choice(task_types)) for i in range(50)]
 
     print("\n1. Initial Task Allocation and Processing:")
     await mas.allocate_tasks(tasks)
@@ -28,9 +28,9 @@ async def test_enhanced_collaborative_intelligence():
         print(f"{agent.agent_id} reputation: {agent.reputation:.2f}")
 
     print("\n2. Extended Simulation:")
-    num_steps = 100  # Reduced simulation steps
+    num_steps = 200  # Increased simulation steps
     for step in range(num_steps):
-        if step % 10 == 0:
+        if step % 20 == 0:
             print(f"Step {step}/{num_steps}")
         await mas.run_simulation(1)
     final_performance = mas.evaluate_system_performance()
@@ -42,6 +42,7 @@ async def test_enhanced_collaborative_intelligence():
     for agent in mas.agents:
         print(f"{agent.agent_id} final specialization: {agent.specialization}")
         print(f"  Specialization strength: {agent.specialization_strength:.2f}")
+        print(f"  Expertise levels: {agent.expertise_level}")
 
     print("\n4. Knowledge Sharing Statistics:")
     for agent in mas.agents:

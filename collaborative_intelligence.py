@@ -24,11 +24,16 @@ class Agent:
         self.total_tasks_processed = 0
         self.specialization_strength = 1.0
         self.knowledge_specialization = defaultdict(float)
+        self.expertise_level = {
+            "classification": 1,
+            "regression": 1,
+            "clustering": 1
+        }
 
     async def process_task(self, task: Task) -> Tuple[str, float]:
-        processing_time = task.complexity * (1 / self.reputation)
+        processing_time = task.complexity * (1 / self.reputation) * (1 / self.expertise_level[task.domain])
         await asyncio.sleep(processing_time)
-        success_probability = min(1.0, (self.reputation * self.specialization_strength) / task.complexity)
+        success_probability = min(1.0, (self.reputation * self.specialization_strength * self.expertise_level[task.domain]) / task.complexity)
         success = random.random() < success_probability
         result = 1.0 if success else 0.0
         self.task_history.append((task.task_id, result))
@@ -39,6 +44,7 @@ class Agent:
         if success:
             self.generate_knowledge(task)
             self.update_specialization_strength(task.domain, 0.1)
+            self.increase_expertise(task.domain)
         else:
             self.update_specialization_strength(task.domain, -0.05)
         
@@ -46,7 +52,7 @@ class Agent:
 
     def generate_knowledge(self, task: Task):
         knowledge_key = f"{task.domain}_technique_{random.randint(1, 100)}"
-        confidence = random.uniform(0.6, 1.0)
+        confidence = random.uniform(0.6, 1.0) * self.expertise_level[task.domain]
         self.knowledge_base[knowledge_key] = {
             'content': f"Learned technique for {task.domain} tasks",
             'confidence': confidence,
@@ -92,6 +98,9 @@ class Agent:
     def should_request_information(self, current_time: int) -> bool:
         return current_time - self.last_information_request >= 7
 
+    def increase_expertise(self, domain: str):
+        self.expertise_level[domain] = min(10, self.expertise_level[domain] + 0.1)
+
 class MultiAgentSystem:
     def __init__(self, agents: List[Agent]):
         self.agents = agents
@@ -109,26 +118,34 @@ class MultiAgentSystem:
 
     async def allocate_tasks(self, tasks: List[Task]):
         agent_workloads = {agent: len(agent.task_queue._queue) for agent in self.agents}
+        domain_workloads = defaultdict(int)
+        for task in tasks:
+            domain_workloads[task.domain] += 1
+
         for task in tasks:
             suitable_agents = [agent for agent in self.agents if agent.specialization == task.domain]
             if not suitable_agents:
                 suitable_agents = self.agents
-            chosen_agent = self._choose_agent_for_task(suitable_agents, task, agent_workloads)
+            chosen_agent = self._choose_agent_for_task(suitable_agents, task, agent_workloads, domain_workloads)
             await chosen_agent.task_queue.put(task)
             agent_workloads[chosen_agent] += 1
+            domain_workloads[task.domain] -= 1
         self.log.append(f"Time {self.current_time}: Allocated {len(tasks)} tasks")
 
-    def _choose_agent_for_task(self, agents: List[Agent], task: Task, agent_workloads: Dict[Agent, int]) -> Agent:
+    def _choose_agent_for_task(self, agents: List[Agent], task: Task, agent_workloads: Dict[Agent, int], domain_workloads: Dict[str, int]) -> Agent:
         agent_scores = []
-        avg_workload = max(1, sum(agent_workloads.values()) / len(agent_workloads))  # Ensure non-zero average
+        avg_workload = max(1, sum(agent_workloads.values()) / len(agent_workloads))
+        total_domain_workload = sum(domain_workloads.values())
         for agent in agents:
             performance_score = self._calculate_agent_performance(agent)
             workload_score = 1 / (1 + abs(agent_workloads[agent] - avg_workload))
             specialization_score = 2 if agent.specialization == task.domain else 1
             warm_up_score = min(1, (self.current_time - agent.creation_time) / 3)
-            integration_score = 3 if agent.total_tasks_processed < 50 else 1  # Increased boost for newer agents
+            integration_score = 3 if agent.total_tasks_processed < 50 else 1
             catch_up_score = 1 + max(0, (avg_workload - agent.total_tasks_processed) / avg_workload)
-            total_score = performance_score * workload_score * specialization_score * warm_up_score * integration_score * catch_up_score
+            domain_balance_score = domain_workloads[task.domain] / total_domain_workload if total_domain_workload > 0 else 1
+            expertise_score = agent.expertise_level[task.domain]
+            total_score = performance_score * workload_score * specialization_score * warm_up_score * integration_score * catch_up_score * domain_balance_score * expertise_score
             agent_scores.append((agent, total_score))
         chosen_agent = max(agent_scores, key=lambda x: x[1])[0]
         self.log.append(f"Time {self.current_time}: Chose {chosen_agent.agent_id} for task {task.task_id}")
@@ -264,7 +281,7 @@ class MultiAgentSystem:
             best_specialization = agent.get_best_specialization()
             if best_specialization != agent.specialization:
                 performance_diff = agent.get_performance_difference()
-                change_probability = min(1.0, performance_diff * 5)  # Increased change probability
+                change_probability = min(1.0, performance_diff * 10)  # Increased sensitivity
                 if random.random() < change_probability:
                     self.log.append(f"Time {self.current_time}: {agent.agent_id} changed specialization from {agent.specialization} to {best_specialization}")
                     self.specialization_changes.append((self.current_time, agent.agent_id, agent.specialization, best_specialization))
@@ -288,19 +305,27 @@ class MultiAgentSystem:
                 if trend < -0.01:
                     self.log.append(f"Time {self.current_time}: Long-term performance declining. Adjusting system parameters.")
                     self._adjust_system_parameters()
+                elif trend > 0.01:
+                    self.log.append(f"Time {self.current_time}: Long-term performance improving. Optimizing system parameters.")
+                    self._optimize_system_parameters()
 
     def _adjust_system_parameters(self):
-        # Example adjustments based on long-term performance decline
         for agent in self.agents:
-            agent.reputation *= 0.9  # Slightly reduce all agent reputations to encourage improvement
-        self.add_agent_threshold *= 0.95  # Make it slightly easier to add new agents
-        self.remove_agent_threshold *= 1.05  # Make it slightly harder to remove agents
+            agent.reputation *= 0.95  # Slightly reduce all agent reputations to encourage improvement
+        self.add_agent_threshold *= 0.98  # Make it slightly easier to add new agents
+        self.remove_agent_threshold *= 1.02  # Make it slightly harder to remove agents
+
+    def _optimize_system_parameters(self):
+        for agent in self.agents:
+            agent.reputation *= 1.05  # Slightly increase all agent reputations to reward good performance
+        self.add_agent_threshold *= 1.02  # Make it slightly harder to add new agents
+        self.remove_agent_threshold *= 0.98  # Make it slightly easier to remove agents
 
     async def run_simulation(self, num_steps: int):
         for _ in range(num_steps):
             self.current_time += 1
             
-            new_tasks = [Task(f"Task_{self.current_time}_{i}", random.uniform(0.3, 0.9), random.choice(["classification", "regression", "clustering"])) for i in range(5)]
+            new_tasks = [Task(f"Task_{self.current_time}_{i}", random.uniform(0.3, 1.5), random.choice(["classification", "regression", "clustering"])) for i in range(5)]
             await self.allocate_tasks(new_tasks)
             
             await self.process_all_tasks()
