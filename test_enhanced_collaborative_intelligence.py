@@ -28,9 +28,9 @@ async def test_enhanced_collaborative_intelligence():
         print(f"{agent.agent_id} reputation: {agent.reputation:.2f}")
 
     print("\n2. Extended Simulation:")
-    num_steps = 200  # Increased simulation steps
+    num_steps = 300  # Increased simulation steps
     for step in range(num_steps):
-        if step % 20 == 0:
+        if step % 50 == 0:
             print(f"Step {step}/{num_steps}")
         await mas.run_simulation(1)
     final_performance = mas.evaluate_system_performance()
@@ -55,10 +55,9 @@ async def test_enhanced_collaborative_intelligence():
             print(f"  {task_type}: {success_rate:.2f} ({performance['total']} tasks)")
 
     print("\n6. Workload Balance:")
-    total_tasks = sum(sum(perf['total'] for perf in agent.performance_by_task_type.values()) for agent in mas.agents)
+    total_tasks = sum(agent.total_tasks_processed for agent in mas.agents)
     for agent in mas.agents:
-        agent_tasks = sum(perf['total'] for perf in agent.performance_by_task_type.values())
-        print(f"{agent.agent_id}: {agent_tasks} tasks ({agent_tasks/total_tasks*100:.2f}% of total)")
+        print(f"{agent.agent_id}: {agent.total_tasks_processed} tasks ({agent.total_tasks_processed/total_tasks*100:.2f}% of total)")
 
     print("\n7. System Log Highlights:")
     log = mas.get_log()
@@ -76,6 +75,26 @@ async def test_enhanced_collaborative_intelligence():
     plt.ylabel("System Performance")
     plt.savefig("system_performance.png")
     print("Long-term performance graph saved as 'system_performance.png'")
+
+    print("\n9. Workload Distribution Over Time:")
+    workload_history = mas.get_workload_history()
+    plt.figure(figsize=(12, 6))
+    for agent_id in workload_history[0].keys():
+        agent_workload = [wl[agent_id] for wl in workload_history]
+        plt.plot(agent_workload, label=agent_id)
+    plt.title("Workload Distribution Over Time")
+    plt.xlabel("Evaluation Interval")
+    plt.ylabel("Proportion of Total Workload")
+    plt.legend()
+    plt.savefig("workload_distribution.png")
+    print("Workload distribution graph saved as 'workload_distribution.png'")
+
+    print("\n10. Specialization Changes:")
+    specialization_changes = mas.get_specialization_changes()
+    print(f"Total specialization changes: {len(specialization_changes)}")
+    print("Last 10 specialization changes:")
+    for change in specialization_changes[-10:]:
+        print(f"Time {change[0]}: {change[1]} changed from {change[2]} to {change[3]}")
 
     print("\nEnhanced Collaborative Intelligence test completed successfully!")
 

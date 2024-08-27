@@ -21,6 +21,7 @@ class Agent:
         self.performance_by_task_type = defaultdict(lambda: {'success': 0, 'total': 0})
         self.creation_time = 0
         self.specialization_change_cooldown = 0
+        self.total_tasks_processed = 0
 
     async def process_task(self, task: Task) -> Tuple[str, float]:
         processing_time = task.complexity * (1 / self.reputation)
@@ -31,6 +32,7 @@ class Agent:
         self.task_history.append((task.task_id, result))
         self.performance_by_task_type[task.domain]['success'] += result
         self.performance_by_task_type[task.domain]['total'] += 1
+        self.total_tasks_processed += 1
         
         if success:
             self.generate_knowledge(task)
@@ -91,6 +93,8 @@ class MultiAgentSystem:
         self.current_time = 0
         self.log = []
         self.performance_history = []
+        self.workload_history = []
+        self.specialization_changes = []
         for agent in self.agents:
             agent.creation_time = self.current_time
 
@@ -113,7 +117,7 @@ class MultiAgentSystem:
             workload_score = 1 / (1 + abs(agent_workloads[agent] - avg_workload))
             specialization_score = 2 if agent.specialization == task.domain else 1
             warm_up_score = min(1, (self.current_time - agent.creation_time) / 3)
-            integration_score = 1 if len(agent.task_history) < 10 else 0.5
+            integration_score = 2 if agent.total_tasks_processed < 50 else 1  # Boost for newer agents
             total_score = performance_score * workload_score * specialization_score * warm_up_score * integration_score
             agent_scores.append((agent, total_score))
         chosen_agent = max(agent_scores, key=lambda x: x[1])[0]
@@ -217,6 +221,7 @@ class MultiAgentSystem:
         workload_balance = self._calculate_workload_balance()
         system_performance = 0.4 * overall_performance + 0.2 * task_coverage + 0.2 * knowledge_diversity + 0.2 * workload_balance
         self.performance_history.append(system_performance)
+        self.workload_history.append(self._get_workload_distribution())
         self.log.append(f"Time {self.current_time}: System performance: {system_performance:.2f}")
         return system_performance
 
@@ -229,12 +234,16 @@ class MultiAgentSystem:
     def _calculate_workload_balance(self):
         if not self.agents:
             return 0
-        workloads = [sum(perf['total'] for perf in agent.performance_by_task_type.values()) for agent in self.agents]
+        workloads = [agent.total_tasks_processed for agent in self.agents]
         if not workloads or sum(workloads) == 0:
             return 1
         avg_workload = sum(workloads) / len(workloads)
         max_deviation = max(abs(w - avg_workload) for w in workloads)
         return 1 - (max_deviation / avg_workload)
+
+    def _get_workload_distribution(self):
+        total_tasks = sum(agent.total_tasks_processed for agent in self.agents)
+        return {agent.agent_id: agent.total_tasks_processed / total_tasks for agent in self.agents}
 
     def _adjust_agent_specializations(self):
         for agent in self.agents:
@@ -245,11 +254,12 @@ class MultiAgentSystem:
             best_specialization = agent.get_best_specialization()
             if best_specialization != agent.specialization:
                 performance_diff = agent.get_performance_difference()
-                change_probability = min(1.0, performance_diff * 2)
+                change_probability = min(1.0, performance_diff * 3)  # Increased change probability
                 if random.random() < change_probability:
                     self.log.append(f"Time {self.current_time}: {agent.agent_id} changed specialization from {agent.specialization} to {best_specialization}")
+                    self.specialization_changes.append((self.current_time, agent.agent_id, agent.specialization, best_specialization))
                     agent.specialization = best_specialization
-                    agent.specialization_change_cooldown = 10  # Set cooldown to prevent frequent changes
+                    agent.specialization_change_cooldown = 5  # Reduced cooldown period
 
     async def run_simulation(self, num_steps: int):
         for _ in range(num_steps):
@@ -279,3 +289,9 @@ class MultiAgentSystem:
 
     def get_performance_history(self):
         return self.performance_history
+
+    def get_workload_history(self):
+        return self.workload_history
+
+    def get_specialization_changes(self):
+        return self.specialization_changes
