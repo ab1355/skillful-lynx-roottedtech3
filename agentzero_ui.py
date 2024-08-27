@@ -115,3 +115,6 @@ def visualizations():
 
 if __name__ == '__main__':
     app.run(host=config.HOST, port=config.PORT, debug=True)
+@app.route(/health)
+def health_check():
+    return jsonify({status: healthy}), 200
