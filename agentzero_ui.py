@@ -26,9 +26,6 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max-limit
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-# In-memory storage for chat messages
-chat_messages = []
-
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -44,7 +41,6 @@ def chat():
 
 def generate_response(message):
     logging.debug(f"Generating response for message: {message}")
-    # More sophisticated response generation
     if 'performance' in message.lower():
         avg_performance = calculate_avg_performance(hr_data)
         return f"The average performance score is {avg_performance:.2f}."
@@ -60,30 +56,16 @@ def generate_response(message):
     else:
         return f"Thank you for your message about '{message}'. How can I assist you with HR data analysis?"
 
-@app.route('/api/messages', methods=['GET', 'POST'])
-def handle_messages():
-    logging.debug(f"Handling {request.method} request to /api/messages")
-    if request.method == 'POST':
-        logging.debug(f"POST request data: {request.json}")
-        message = request.json.get('message')
-        
-        logging.debug(f"Received message: {message}")
-        
-        try:
-            chat_messages.append({'text': message, 'sender': 'user'})
-            
-            # Generate and add response
-            response = generate_response(message)
-            chat_messages.append({'text': response, 'sender': 'bot'})
-            
-            logging.debug(f"Current chat messages: {chat_messages}")
-            return jsonify({'status': 'success', 'response': response})
-        except Exception as e:
-            logging.error(f"Error processing message: {str(e)}")
-            return jsonify({'status': 'error', 'message': str(e)}), 500
+@app.route('/api/chat', methods=['POST'])
+def chat_api():
+    logging.debug(f"Received chat API request: {request.json}")
+    message = request.json.get('message')
+    if message:
+        response = generate_response(message)
+        logging.debug(f"Generated response: {response}")
+        return jsonify({'status': 'success', 'response': response})
     else:
-        logging.debug(f"Returning chat messages: {chat_messages}")
-        return jsonify(chat_messages)
+        return jsonify({'status': 'error', 'message': 'No message provided'}), 400
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):

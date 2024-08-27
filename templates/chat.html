@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HR Data Analysis Chat</title>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
         #chat-container {
             width: 80%;
@@ -38,45 +37,49 @@
     </div>
 
     <script>
-        $(document).ready(function() {
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatMessages = document.getElementById('chat-messages');
+            const userInput = document.getElementById('user-input');
+            const sendButton = document.getElementById('send-button');
+
             function addMessage(message, sender) {
-                $('#chat-messages').append(`<p><strong>${sender}:</strong> ${message}</p>`);
-                $('#chat-messages').scrollTop($('#chat-messages')[0].scrollHeight);
+                const messageElement = document.createElement('p');
+                messageElement.innerHTML = `<strong>${sender}:</strong> ${message}`;
+                chatMessages.appendChild(messageElement);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
             }
 
             function sendMessage() {
-                var message = $('#user-input').val();
+                const message = userInput.value.trim();
                 if (message) {
-                    console.log("Sending message:", message);
                     addMessage(message, 'User');
-                    $.ajax({
-                        url: '/api/messages',
+                    fetch('/api/chat', {
                         method: 'POST',
-                        contentType: 'application/json',
-                        data: JSON.stringify({ message: message }),
-                        success: function(data) {
-                            console.log("Received response:", data);
-                            if (data.status === 'success') {
-                                addMessage(data.response, 'Bot');
-                            } else {
-                                console.error("Error:", data.message);
-                                addMessage("Sorry, there was an error processing your request.", 'Bot');
-                            }
+                        headers: {
+                            'Content-Type': 'application/json',
                         },
-                        error: function(jqXHR, textStatus, errorThrown) {
-                            console.error("AJAX error:", textStatus, errorThrown);
-                            addMessage("Sorry, there was an error communicating with the server.", 'Bot');
+                        body: JSON.stringify({ message: message }),
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            addMessage(data.response, 'Bot');
+                        } else {
+                            addMessage("Sorry, there was an error processing your request.", 'Bot');
                         }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        addMessage("Sorry, there was an error communicating with the server.", 'Bot');
                     });
-                    $('#user-input').val('');
+                    userInput.value = '';
                 }
             }
 
-            $('#send-button').click(sendMessage);
-            $('#user-input').keypress(function(e) {
-                if (e.which == 13) {
+            sendButton.addEventListener('click', sendMessage);
+            userInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
                     sendMessage();
-                    return false;
                 }
             });
         });
