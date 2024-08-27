@@ -3,11 +3,10 @@ from typing import List, Dict, Any, Tuple
 import random
 import asyncio
 from collections import defaultdict
+from agent import Agent
 from models import SpecializedModel, create_model
 from task import Task
 from privacy import secure_aggregate
-
-# ... (Agent class remains the same)
 
 class MultiAgentSystem:
     def __init__(self, agents: List[Agent]):
@@ -156,7 +155,84 @@ class MultiAgentSystem:
             return provider.knowledge_base[topic]
         return None
 
-    # ... (Add other necessary methods like _adjust_agent_specializations, _improve_mentoring, etc.)
+    def _adjust_agent_specializations(self):
+        global_domain_performance = self._calculate_global_domain_performance()
+        for agent in self.agents:
+            if agent.specialization_change_cooldown > 0:
+                agent.specialization_change_cooldown -= 1
+                continue
+
+            best_specialization = self._get_best_specialization_for_agent(agent, global_domain_performance)
+            if best_specialization != agent.specialization:
+                performance_diff = agent.get_performance_difference()
+                utilization_factor = 1 - agent.utilization_score
+                long_term_trend = (agent.long_term_performance[-1] - agent.long_term_performance[0]) / len(agent.long_term_performance) if agent.long_term_performance else 0
+                change_probability = min(1.0, performance_diff * 40 + utilization_factor * 0.3 + long_term_trend * 0.2)
+                if random.random() < change_probability:
+                    self._remove_mentorship(agent)
+                    self.log.append(f"Time {self.current_time}: {agent.agent_id} changed specialization from {agent.specialization} to {best_specialization}")
+                    self.specialization_changes.append((self.current_time, agent.agent_id, agent.specialization, best_specialization))
+                    agent.specialization = best_specialization
+                    agent.specialization_strength = 1.0  # Reset specialization strength
+                    agent.specialization_change_cooldown = 1  # Reduced cooldown period
+                    self._assign_mentors(agent)
+
+    def _improve_mentoring(self):
+        for agent in self.agents:
+            for mentee in agent.mentees:
+                for domain in ["classification", "regression", "clustering"]:
+                    expertise_diff = max(0, agent.get_domain_expertise(domain) - mentee.get_domain_expertise(domain))
+                    mentoring_impact = expertise_diff * 0.1  # 10% of the difference
+                    if domain == "clustering":
+                        mentoring_impact *= 1.5  # 50% boost for clustering domain
+                    mentee.increase_domain_expertise(domain, mentoring_impact)
+                    agent.mentoring_impact[domain].append(mentoring_impact)
+
+    def _should_remove_agent(self) -> Tuple[bool, Agent]:
+        if len(self.agents) <= 3:
+            return False, None
+        underperforming_agents = [agent for agent in self.agents if sum(agent.long_term_performance[-10:]) / 10 < self.remove_agent_threshold]
+        if not underperforming_agents:
+            return False, None
+        domain_counts = defaultdict(int)
+        for agent in self.agents:
+            domain_counts[agent.specialization] += 1
+        removable_agents = [agent for agent in underperforming_agents if domain_counts[agent.specialization] > 1]
+        if not removable_agents:
+            return False, None
+        return True, min(removable_agents, key=lambda a: sum(a.long_term_performance[-10:]) / 10)
+
+    def _should_add_agent(self) -> bool:
+        if len(self.agents) >= 10:
+            return False
+        recent_performance = self.performance_history[-10:]
+        performance_trend = sum(recent_performance) / len(recent_performance)
+        domain_needs = any(sum(perf[-5:]) / 5 < 0.6 for perf in self.domain_performance.values())
+        return performance_trend > self.add_agent_threshold or domain_needs
+
+    def _adjust_task_complexity_rates(self):
+        for domain in ["classification", "regression", "clustering"]:
+            domain_performance = sum(self.domain_performance[domain][-10:]) / 10
+            if domain_performance > 0.9:
+                self.domain_specific_complexity[domain] *= (1 + self.task_complexity_adjustment_rate)
+            elif domain_performance < 0.7:
+                self.domain_specific_complexity[domain] *= (1 - self.task_complexity_adjustment_rate)
+            self.domain_specific_complexity[domain] = max(0.5, min(2.0, self.domain_specific_complexity[domain]))
+
+    def _calculate_global_domain_performance(self):
+        global_performance = defaultdict(lambda: {'success': 0, 'total': 0})
+        for agent in self.agents:
+            for domain, performance in agent.performance_by_task_type.items():
+                global_performance[domain]['success'] += performance['success']
+                global_performance[domain]['total'] += performance['total']
+        return {domain: perf['success'] / max(1, perf['total']) for domain, perf in global_performance.items()}
+
+    def _get_best_specialization_for_agent(self, agent: Agent, global_domain_performance: Dict[str, float]):
+        agent_performance = {domain: perf['success'] / max(1, perf['total']) for domain, perf in agent.performance_by_task_type.items()}
+        combined_performance = {}
+        for domain in agent_performance:
+            combined_performance[domain] = 0.6 * agent_performance[domain] + 0.3 * global_domain_performance[domain] + 0.1 * (1 - agent.utilization_score)
+        return max(combined_performance, key=combined_performance.get)
 
     async def run_simulation(self, num_steps: int):
         for _ in range(num_steps):
@@ -210,5 +286,3 @@ class MultiAgentSystem:
 
     def get_mentoring_reports(self):
         return self.mentoring_reports
-
-# ... (rest of the code)
