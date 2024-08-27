@@ -33,6 +33,7 @@ class Agent:
         self.mentee = None
         self.mentoring_impact = defaultdict(list)  # Track impact of mentoring
         self.ramp_up_boost = 1.0  # Temporary boost for new agents
+        self.utilization_score = 1.0  # New attribute to track agent utilization
 
     async def process_task(self, task: Task) -> Tuple[str, float]:
         processing_time = task.complexity * (1 / (self.reputation * self.ramp_up_boost)) * (1 / self.expertise_level[task.domain])
@@ -115,6 +116,11 @@ class Agent:
     def decay_ramp_up_boost(self):
         self.ramp_up_boost = max(1.0, self.ramp_up_boost * 0.95)
 
+    def update_utilization_score(self, total_tasks: int):
+        expected_tasks = total_tasks / len(self.performance_by_task_type)
+        actual_tasks = self.total_tasks_processed
+        self.utilization_score = min(2.0, max(0.5, actual_tasks / expected_tasks))
+
 class MultiAgentSystem:
     def __init__(self, agents: List[Agent]):
         self.agents = agents
@@ -162,7 +168,8 @@ class MultiAgentSystem:
             domain_balance_score = domain_workloads[task.domain] / total_domain_workload if total_domain_workload > 0 else 1
             expertise_score = agent.expertise_level[task.domain]
             ramp_up_score = agent.ramp_up_boost
-            total_score = performance_score * workload_score * specialization_score * warm_up_score * integration_score * catch_up_score * domain_balance_score * expertise_score * ramp_up_score
+            utilization_score = 1 / agent.utilization_score  # Favor underutilized agents
+            total_score = performance_score * workload_score * specialization_score * warm_up_score * integration_score * catch_up_score * domain_balance_score * expertise_score * ramp_up_score * utilization_score
             agent_scores.append((agent, total_score))
         chosen_agent = max(agent_scores, key=lambda x: x[1])[0]
         self.log.append(f"Time {self.current_time}: Chose {chosen_agent.agent_id} for task {task.task_id}")
@@ -183,6 +190,11 @@ class MultiAgentSystem:
             self.task_history[agent.agent_id].append((task_id, success_rate))
             self._update_agent_reputation(agent)
         self.log.append(f"Time {self.current_time}: Processed {len(results)} tasks")
+
+        # Update utilization scores
+        total_tasks = sum(len(agent.task_history) for agent in self.agents)
+        for agent in self.agents:
+            agent.update_utilization_score(total_tasks)
 
     def _update_agent_reputation(self, agent: Agent):
         recent_performance = self._calculate_agent_performance(agent)
@@ -331,23 +343,39 @@ class MultiAgentSystem:
         self.mentoring_reports.append(report)
 
     def _adjust_agent_specializations(self):
+        global_domain_performance = self._calculate_global_domain_performance()
         for agent in self.agents:
             if agent.specialization_change_cooldown > 0:
                 agent.specialization_change_cooldown -= 1
                 continue
 
-            best_specialization = agent.get_best_specialization()
+            best_specialization = self._get_best_specialization_for_agent(agent, global_domain_performance)
             if best_specialization != agent.specialization:
                 performance_diff = agent.get_performance_difference()
-                change_probability = min(1.0, performance_diff * 25)  # Increased sensitivity further
+                change_probability = min(1.0, performance_diff * 30)  # Increased sensitivity even further
                 if random.random() < change_probability:
                     self._remove_mentorship(agent)
                     self.log.append(f"Time {self.current_time}: {agent.agent_id} changed specialization from {agent.specialization} to {best_specialization}")
                     self.specialization_changes.append((self.current_time, agent.agent_id, agent.specialization, best_specialization))
                     agent.specialization = best_specialization
                     agent.specialization_strength = 1.0  # Reset specialization strength
-                    agent.specialization_change_cooldown = 2  # Reduced cooldown period further
+                    agent.specialization_change_cooldown = 2  # Kept the reduced cooldown period
                     self._assign_mentor(agent)
+
+    def _calculate_global_domain_performance(self):
+        global_performance = defaultdict(lambda: {'success': 0, 'total': 0})
+        for agent in self.agents:
+            for domain, performance in agent.performance_by_task_type.items():
+                global_performance[domain]['success'] += performance['success']
+                global_performance[domain]['total'] += performance['total']
+        return {domain: perf['success'] / max(1, perf['total']) for domain, perf in global_performance.items()}
+
+    def _get_best_specialization_for_agent(self, agent: Agent, global_domain_performance: Dict[str, float]):
+        agent_performance = {domain: perf['success'] / max(1, perf['total']) for domain, perf in agent.performance_by_task_type.items()}
+        combined_performance = {}
+        for domain in agent_performance:
+            combined_performance[domain] = 0.7 * agent_performance[domain] + 0.3 * global_domain_performance[domain]
+        return max(combined_performance, key=combined_performance.get)
 
     def _update_performance_thresholds(self):
         if len(self.performance_history) > 10:
