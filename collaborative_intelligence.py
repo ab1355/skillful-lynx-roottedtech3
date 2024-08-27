@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 import random
 import asyncio
 import logging
@@ -17,21 +17,21 @@ from scipy.stats import entropy
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class Config:
-    def __init__(self, config_file=None):
-        self.num_initial_agents = 10
-        self.num_steps = 50
-        self.task_complexity_range = (0.1, 0.5)
-        self.tasks_per_step = 10
-        self.add_agent_threshold = 0.6
-        self.remove_agent_threshold = 0.2
-        self.task_complexity_adjustment_rate = 0.01
-        self.epsilon = 0.5
-        self.mentoring_threshold = 0.4
-        self.mentoring_boost = 0.1
-        self.knowledge_transfer_rate = 0.2
-        self.federated_learning_weight = 0.3
-        self.environmental_factor_range = (0, 0.2)
-        self.collaboration_threshold = 0.6
+    def __init__(self, config_file: Optional[str] = None):
+        self.num_initial_agents: int = 10
+        self.num_steps: int = 50
+        self.task_complexity_range: Tuple[float, float] = (0.1, 0.5)
+        self.tasks_per_step: int = 10
+        self.add_agent_threshold: float = 0.6
+        self.remove_agent_threshold: float = 0.2
+        self.task_complexity_adjustment_rate: float = 0.01
+        self.epsilon: float = 0.5
+        self.mentoring_threshold: float = 0.4
+        self.mentoring_boost: float = 0.1
+        self.knowledge_transfer_rate: float = 0.2
+        self.federated_learning_weight: float = 0.3
+        self.environmental_factor_range: Tuple[float, float] = (0, 0.2)
+        self.collaboration_threshold: float = 0.6
 
         if config_file:
             with open(config_file, 'r') as f:
@@ -42,25 +42,25 @@ class MultiAgentSystem:
     def __init__(self, agents: List[Agent], config: Config):
         self.agents = agents
         self.config = config
-        self.task_history = defaultdict(list)
+        self.task_history: Dict[str, List[Tuple[int, float]]] = defaultdict(list)
         self.current_time = 0
-        self.log = []
-        self.performance_history = []
-        self.workload_history = []
-        self.specialization_changes = []
-        self.long_term_performance = []
-        self.domain_performance = defaultdict(list)
-        self.mentoring_reports = []
-        self.task_complexity_adjustment = 1.0
-        self.domain_specific_complexity = {domain: 1.0 for domain in ["classification", "regression", "clustering", "natural_language_processing", "computer_vision"]}
+        self.log: List[str] = []
+        self.performance_history: List[float] = []
+        self.workload_history: List[Dict[str, int]] = []
+        self.specialization_changes: List[Tuple[str, str, str]] = []
+        self.long_term_performance: List[float] = []
+        self.domain_performance: Dict[str, List[float]] = defaultdict(list)
+        self.mentoring_reports: List[Tuple[int, str, str]] = []
+        self.task_complexity_adjustment: float = 1.0
+        self.domain_specific_complexity: Dict[str, float] = {domain: 1.0 for domain in ["classification", "regression", "clustering", "natural_language_processing", "computer_vision"]}
         self.agent_interactions = nx.Graph()
         self.knowledge_graph = nx.Graph()
-        self.collective_hypotheses = []
+        self.collective_hypotheses: List[Tuple[str, str]] = []
         for agent in self.agents:
             agent.creation_time = self.current_time
             self.agent_interactions.add_node(agent.id)
 
-    async def run_simulation(self, num_steps: int):
+    async def run_simulation(self, num_steps: int) -> float:
         for step in range(num_steps):
             self.current_time += 1
             
@@ -97,7 +97,7 @@ class MultiAgentSystem:
         return self.evaluate_system_performance()
 
     async def allocate_tasks(self, tasks: List[Task]):
-        agent_workloads = {agent: len(agent.task_queue._queue) for agent in self.agents}
+        agent_workloads = {agent: agent.task_queue.qsize() for agent in self.agents}
         domain_workloads = defaultdict(int)
         for task in tasks:
             domain_workloads[task.domain] += 1
@@ -161,7 +161,7 @@ class MultiAgentSystem:
                 tasks.append(task)
         return tasks
 
-    def evaluate_system_performance(self):
+    def evaluate_system_performance(self) -> float:
         if not self.agents:
             return 0.0
         
@@ -216,7 +216,7 @@ class MultiAgentSystem:
         
         for mentor, mentee in zip(mentors, mentees):
             if mentee.performance_history and mentee.performance_history[-1] < self.config.mentoring_threshold:
-                if not mentee.task_queue._queue:
+                if mentee.task_queue.empty():
                     # If the mentee's task queue is empty, generate a new task for mentoring
                     task = Task.generate_random_task(f"Mentoring_Task_{self.current_time}", self.config.task_complexity_range)
                 else:
@@ -381,7 +381,7 @@ class MultiAgentSystem:
             )
         logging.info(f"Adjusted task complexity range: {self.config.task_complexity_range}")
 
-    def detect_biases(self):
+    def detect_biases(self) -> Dict[str, str]:
         domain_knowledge = defaultdict(list)
         for agent in self.agents:
             for domain_idx, domain in enumerate(["classification", "regression", "clustering", "natural_language_processing", "computer_vision"]):
@@ -398,7 +398,7 @@ class MultiAgentSystem:
         
         return biases
 
-    async def address_biases(self, biases):
+    async def address_biases(self, biases: Dict[str, str]):
         for domain, bias_description in biases.items():
             logging.info(f"Addressing bias: {bias_description}")
             for agent in self.agents:
@@ -411,7 +411,7 @@ class MultiAgentSystem:
                     task = Task.generate_random_task(f"Bias_Task_{self.current_time}", self.config.task_complexity_range)
                     await agent.task_queue.put(task)
 
-    def calculate_system_entropy(self):
+    def calculate_system_entropy(self) -> Dict[str, float]:
         domain_knowledge = defaultdict(list)
         for agent in self.agents:
             for domain_idx, domain in enumerate(["classification", "regression", "clustering", "natural_language_processing", "computer_vision"]):
