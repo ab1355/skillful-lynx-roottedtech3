@@ -9,17 +9,18 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 async def run_simulation(num_steps: int):
     config = Config()
-    config.num_initial_agents = 5  # Reduced from 15
+    config.num_initial_agents = 5  # Reduced from 10
     config.num_steps = num_steps
-    config.tasks_per_step = 10  # Reduced from 20
+    config.tasks_per_step = 5  # Reduced from 15
     config.task_complexity_range = (0.2, 0.7)
     config.remove_agent_threshold = 0.2
     config.mentoring_threshold = 0.4
     config.mentoring_boost = 0.1
     config.environmental_factor_range = (0, 0.2)
+    config.collaboration_threshold = 0.6
     
     agents = [Agent(f"Agent_{i}", 
-                    random.choice(["classification", "regression", "clustering"]),
+                    random.choice(["classification", "regression", "clustering", "natural_language_processing", "computer_vision"]),
                     random.choice(["basic", "intermediate", "advanced"])) 
               for i in range(config.num_initial_agents)]
     
@@ -45,7 +46,7 @@ async def run_simulation(num_steps: int):
         entropies = mas.calculate_system_entropy()
         entropy_history.append(sum(entropies.values()) / len(entropies))
         
-        if step % 10 == 0:
+        if step % 5 == 0:  # Reduced from 10
             logging.info(f"Current system entropy: {entropies}")
     
     return performance_history, agent_count_history, entropy_history, mas
@@ -79,7 +80,7 @@ def plot_results(performance_history, agent_count_history, entropy_history, num_
     logging.info("Simulation results plot saved as simulation_results.png")
 
 if __name__ == "__main__":
-    num_steps = 20  # Reduced from 100
+    num_steps = 20  # Reduced from 50
     performance_history, agent_count_history, entropy_history, mas = asyncio.run(run_simulation(num_steps))
     
     plot_results(performance_history, agent_count_history, entropy_history, num_steps)
@@ -122,5 +123,11 @@ if __name__ == "__main__":
     logging.info("\nFinal system entropies:")
     for domain, entropy_value in final_entropies.items():
         logging.info(f"  {domain}: {entropy_value:.4f}")
+
+    # Additional visualizations and analyses
+    mas.visualize_skill_distribution()
+    mas.analyze_collaboration_patterns()
+    mas.analyze_learning_strategies()
+    mas.analyze_task_performance()
 
     logging.info("\nSimulation completed. Check the generated plots and log file for detailed results.")

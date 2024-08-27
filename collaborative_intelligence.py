@@ -31,6 +31,7 @@ class Config:
         self.knowledge_transfer_rate = 0.2
         self.federated_learning_weight = 0.3
         self.environmental_factor_range = (0, 0.2)
+        self.collaboration_threshold = 0.6
 
         if config_file:
             with open(config_file, 'r') as f:
@@ -51,60 +52,13 @@ class MultiAgentSystem:
         self.domain_performance = defaultdict(list)
         self.mentoring_reports = []
         self.task_complexity_adjustment = 1.0
-        self.domain_specific_complexity = {domain: 1.0 for domain in ["classification", "regression", "clustering"]}
+        self.domain_specific_complexity = {domain: 1.0 for domain in ["classification", "regression", "clustering", "natural_language_processing", "computer_vision"]}
         self.agent_interactions = nx.Graph()
         self.knowledge_graph = nx.Graph()
         self.collective_hypotheses = []
         for agent in self.agents:
             agent.creation_time = self.current_time
             self.agent_interactions.add_node(agent.id)
-
-    async def allocate_tasks(self, tasks: List[Task]):
-        agent_workloads = {agent: len(agent.task_queue._queue) for agent in self.agents}
-        domain_workloads = defaultdict(int)
-        for task in tasks:
-            domain_workloads[task.domain] += 1
-
-        for task in tasks:
-            chosen_agent = self._choose_agent_for_task(task, agent_workloads, domain_workloads)
-            await chosen_agent.task_queue.put(task)
-            agent_workloads[chosen_agent] += 1
-            domain_workloads[task.domain] -= 1
-        logging.info(f"Time {self.current_time}: Allocated {len(tasks)} tasks")
-
-    def _choose_agent_for_task(self, task: Task, agent_workloads: Dict[Agent, int], domain_workloads: Dict[str, int]) -> Agent:
-        suitable_agents = [agent for agent in self.agents if agent.specialization == task.domain and agent.sub_specialization == task.sub_domain]
-        if not suitable_agents:
-            suitable_agents = [agent for agent in self.agents if agent.specialization == task.domain]
-        if not suitable_agents:
-            suitable_agents = self.agents
-
-        agent_scores = {}
-        for agent in suitable_agents:
-            specialization_score = 1 if agent.specialization == task.domain else 0.5
-            sub_specialization_score = 1 if agent.sub_specialization == task.sub_domain else 0.75
-            performance_score = agent.performance_history[-1] if agent.performance_history else 0
-            workload_score = 1 / (agent_workloads[agent] + 1)
-            reputation_score = agent.reputation
-            uncertainty_score = 1 - agent.express_uncertainty(task)
-            curiosity_score = agent.curiosity if task.domain != agent.specialization else 0
-            agent_scores[agent] = (
-                specialization_score * sub_specialization_score * performance_score * 
-                workload_score * reputation_score * uncertainty_score + curiosity_score
-            )
-
-        return max(agent_scores, key=agent_scores.get)
-
-    async def process_all_tasks(self):
-        for agent in self.agents:
-            while not agent.task_queue.empty():
-                task = await agent.task_queue.get()
-                environmental_factor = random.uniform(*self.config.environmental_factor_range)
-                result = agent.process_task(task, environmental_factor)
-                agent.update_knowledge(task, result)
-                self.task_history[task.domain].append((self.current_time, result))
-                agent.performance_history.append(result)
-                agent.update_reputation(result)
 
     async def run_simulation(self, num_steps: int):
         for step in range(num_steps):
@@ -142,13 +96,65 @@ class MultiAgentSystem:
         self._visualize_knowledge_graph()
         return self.evaluate_system_performance()
 
+    async def allocate_tasks(self, tasks: List[Task]):
+        agent_workloads = {agent: len(agent.task_queue._queue) for agent in self.agents}
+        domain_workloads = defaultdict(int)
+        for task in tasks:
+            domain_workloads[task.domain] += 1
+
+        for task in tasks:
+            chosen_agent = self._choose_agent_for_task(task, agent_workloads, domain_workloads)
+            await chosen_agent.task_queue.put(task)
+            agent_workloads[chosen_agent] += 1
+            domain_workloads[task.domain] -= 1
+        logging.info(f"Time {self.current_time}: Allocated {len(tasks)} tasks")
+
+    def _choose_agent_for_task(self, task: Task, agent_workloads: Dict[Agent, int], domain_workloads: Dict[str, int]) -> Agent:
+        suitable_agents = [agent for agent in self.agents if agent.specialization == task.domain and agent.sub_specialization == task.sub_domain]
+        if not suitable_agents:
+            suitable_agents = [agent for agent in self.agents if agent.specialization == task.domain]
+        if not suitable_agents:
+            suitable_agents = self.agents
+
+        agent_scores = {}
+        for agent in suitable_agents:
+            specialization_score = 1 if agent.specialization == task.domain else 0.5
+            sub_specialization_score = 1 if agent.sub_specialization == task.sub_domain else 0.75
+            performance_score = agent.performance_history[-1] if agent.performance_history else 0
+            workload_score = 1 / (agent_workloads[agent] + 1)
+            reputation_score = agent.reputation
+            uncertainty_score = 1 - agent.express_uncertainty(task)
+            curiosity_score = agent.curiosity if task.domain != agent.specialization else 0
+            skill_score = agent.skills[task.task_type]
+            agent_scores[agent] = (
+                specialization_score * sub_specialization_score * performance_score * 
+                workload_score * reputation_score * uncertainty_score * skill_score + curiosity_score
+            )
+
+        return max(agent_scores, key=agent_scores.get)
+
+    async def process_all_tasks(self):
+        for agent in self.agents:
+            while not agent.task_queue.empty():
+                task = await agent.task_queue.get()
+                environmental_factor = random.uniform(*self.config.environmental_factor_range)
+                
+                if random.random() < self.config.collaboration_threshold:
+                    collaborator = random.choice([a for a in self.agents if a != agent])
+                    result = agent.collaborate(collaborator, task)
+                    self.agent_interactions.add_edge(agent.id, collaborator.id, weight=result)
+                else:
+                    result = agent.process_task(task, environmental_factor)
+                
+                agent.update_knowledge(task, result)
+                self.task_history[task.domain].append((self.current_time, result))
+                agent.performance_history.append(result)
+                agent.update_reputation(result)
+
     def _generate_tasks(self) -> List[Task]:
         tasks = []
         for i in range(self.config.tasks_per_step):
-            domain = random.choice(["classification", "regression", "clustering"])
-            sub_domain = random.choice(["basic", "intermediate", "advanced"])
-            complexity = random.uniform(*self.config.task_complexity_range) * self.domain_specific_complexity[domain]
-            task = Task(f"Task_{self.current_time}_{i}", complexity, domain, sub_domain)
+            task = Task.generate_random_task(f"Task_{self.current_time}_{i}", self.config.task_complexity_range)
             if random.random() < 0.2:  # 20% chance of task decomposition
                 tasks.extend(random.choice(self.agents).decompose_task(task))
             else:
@@ -212,7 +218,7 @@ class MultiAgentSystem:
             if mentee.performance_history and mentee.performance_history[-1] < self.config.mentoring_threshold:
                 if not mentee.task_queue._queue:
                     # If the mentee's task queue is empty, generate a new task for mentoring
-                    task = Task(f"Mentoring_Task_{self.current_time}", 0.5, mentor.specialization, mentor.sub_specialization)
+                    task = Task.generate_random_task(f"Mentoring_Task_{self.current_time}", self.config.task_complexity_range)
                 else:
                     task = random.choice(list(mentee.task_queue._queue))
                 mentor.mentor(mentee, task)
@@ -239,7 +245,7 @@ class MultiAgentSystem:
         initial_count = len(self.agents)
         while len(self.agents) < self.config.num_initial_agents:
             new_agent = Agent(f"Agent_{self.current_time}_{len(self.agents)}", 
-                              random.choice(["classification", "regression", "clustering"]),
+                              random.choice(["classification", "regression", "clustering", "natural_language_processing", "computer_vision"]),
                               random.choice(["basic", "intermediate", "advanced"]))
             new_agent.creation_time = self.current_time
             
@@ -271,12 +277,12 @@ class MultiAgentSystem:
     def _update_knowledge_graph(self):
         self.knowledge_graph.clear()
         for agent in self.agents:
-            for d1, domain1 in enumerate(["classification", "regression", "clustering"]):
+            for d1, domain1 in enumerate(["classification", "regression", "clustering", "natural_language_processing", "computer_vision"]):
                 for s1, subdomain1 in enumerate(["basic", "intermediate", "advanced"]):
                     for a1, aspect1 in enumerate(["theory", "implementation", "optimization"]):
                         node1 = f"{domain1}_{subdomain1}_{aspect1}"
                         self.knowledge_graph.add_node(node1, weight=agent.knowledge[d1, s1, a1])
-                        for d2, domain2 in enumerate(["classification", "regression", "clustering"]):
+                        for d2, domain2 in enumerate(["classification", "regression", "clustering", "natural_language_processing", "computer_vision"]):
                             for s2, subdomain2 in enumerate(["basic", "intermediate", "advanced"]):
                                 for a2, aspect2 in enumerate(["theory", "implementation", "optimization"]):
                                     if d1 != d2 or s1 != s2 or a1 != a2:
@@ -314,7 +320,7 @@ class MultiAgentSystem:
     def _visualize_knowledge_distribution(self):
         knowledge_data = []
         for agent in self.agents:
-            for domain_idx, domain in enumerate(["classification", "regression", "clustering"]):
+            for domain_idx, domain in enumerate(["classification", "regression", "clustering", "natural_language_processing", "computer_vision"]):
                 for subdomain_idx, subdomain in enumerate(["basic", "intermediate", "advanced"]):
                     knowledge_data.append({
                         "Agent": agent.id,
@@ -349,7 +355,14 @@ class MultiAgentSystem:
         nx.draw(self.knowledge_graph, pos, with_labels=True, node_color='lightgreen', 
                 node_size=300, font_size=6, font_weight='bold')
         edge_weights = nx.get_edge_attributes(self.knowledge_graph, 'weight')
-        nx.draw_networkx_edge_labels(self.knowledge_graph, pos, edge_labels=edge_weights)
+        
+        # Handle potential errors in drawing edge labels
+        try:
+            nx.draw_networkx_edge_labels(self.knowledge_graph, pos, edge_labels=edge_weights)
+        except Exception as e:
+            logging.warning(f"Error drawing edge labels: {e}")
+            logging.warning("Skipping edge labels in knowledge graph visualization.")
+        
         plt.title("Knowledge Graph")
         plt.savefig("knowledge_graph.png")
         plt.close()
@@ -371,7 +384,7 @@ class MultiAgentSystem:
     def detect_biases(self):
         domain_knowledge = defaultdict(list)
         for agent in self.agents:
-            for domain_idx, domain in enumerate(["classification", "regression", "clustering"]):
+            for domain_idx, domain in enumerate(["classification", "regression", "clustering", "natural_language_processing", "computer_vision"]):
                 domain_knowledge[domain].append(np.mean(agent.knowledge[domain_idx]))
         
         biases = {}
@@ -395,13 +408,13 @@ class MultiAgentSystem:
                 elif "Low overall knowledge" in bias_description:
                     # Generate more tasks in this domain
                     self.config.tasks_per_step += 1
-                    task = Task(f"Bias_Task_{self.current_time}", 0.5, domain, random.choice(["basic", "intermediate", "advanced"]))
+                    task = Task.generate_random_task(f"Bias_Task_{self.current_time}", self.config.task_complexity_range)
                     await agent.task_queue.put(task)
 
     def calculate_system_entropy(self):
         domain_knowledge = defaultdict(list)
         for agent in self.agents:
-            for domain_idx, domain in enumerate(["classification", "regression", "clustering"]):
+            for domain_idx, domain in enumerate(["classification", "regression", "clustering", "natural_language_processing", "computer_vision"]):
                 domain_knowledge[domain].append(np.mean(agent.knowledge[domain_idx]))
         
         entropies = {}
@@ -410,5 +423,78 @@ class MultiAgentSystem:
             entropies[domain] = entropy(hist + 1e-10)  # Add small constant to avoid log(0)
         
         return entropies
+
+    def visualize_skill_distribution(self):
+        skill_data = []
+        for agent in self.agents:
+            for skill, value in agent.skills.items():
+                skill_data.append({
+                    "Agent": agent.id,
+                    "Skill": skill,
+                    "Value": value
+                })
+        
+        df = pd.DataFrame(skill_data)
+        plt.figure(figsize=(12, 8))
+        sns.heatmap(df.pivot(index="Agent", columns="Skill", values="Value"),
+                    cmap="YlOrRd", annot=True, fmt=".2f")
+        plt.title("Skill Distribution Across Agents")
+        plt.savefig("skill_distribution.png")
+        plt.close()
+
+    def analyze_collaboration_patterns(self):
+        collaboration_counts = defaultdict(int)
+        for edge in self.agent_interactions.edges(data=True):
+            collaboration_counts[edge[0]] += 1
+            collaboration_counts[edge[1]] += 1
+        
+        most_collaborative = max(collaboration_counts, key=collaboration_counts.get)
+        least_collaborative = min(collaboration_counts, key=collaboration_counts.get)
+        
+        logging.info(f"Most collaborative agent: {most_collaborative} with {collaboration_counts[most_collaborative]} collaborations")
+        logging.info(f"Least collaborative agent: {least_collaborative} with {collaboration_counts[least_collaborative]} collaborations")
+        
+        plt.figure(figsize=(10, 6))
+        plt.bar(collaboration_counts.keys(), collaboration_counts.values())
+        plt.title("Agent Collaboration Frequency")
+        plt.xlabel("Agent ID")
+        plt.ylabel("Number of Collaborations")
+        plt.savefig("collaboration_frequency.png")
+        plt.close()
+
+    def analyze_learning_strategies(self):
+        strategy_counts = defaultdict(int)
+        for agent in self.agents:
+            strategy_counts[agent.learning_strategy] += 1
+        
+        plt.figure(figsize=(10, 6))
+        plt.bar(strategy_counts.keys(), strategy_counts.values())
+        plt.title("Learning Strategy Distribution")
+        plt.xlabel("Learning Strategy")
+        plt.ylabel("Number of Agents")
+        plt.savefig("learning_strategy_distribution.png")
+        plt.close()
+        
+        logging.info("Learning Strategy Distribution:")
+        for strategy, count in strategy_counts.items():
+            logging.info(f"  {strategy}: {count}")
+
+    def analyze_task_performance(self):
+        task_type_performance = defaultdict(list)
+        for domain, performances in self.task_history.items():
+            for _, performance in performances:
+                task_type_performance[domain].append(performance)
+        
+        plt.figure(figsize=(12, 6))
+        plt.boxplot([performances for performances in task_type_performance.values()], labels=task_type_performance.keys())
+        plt.title("Task Performance by Domain")
+        plt.xlabel("Domain")
+        plt.ylabel("Performance")
+        plt.savefig("task_performance_by_domain.png")
+        plt.close()
+        
+        logging.info("Task Performance by Domain:")
+        for domain, performances in task_type_performance.items():
+            logging.info(f"  {domain}: Mean = {np.mean(performances):.4f}, Std = {np.std(performances):.4f}")
 
 # Add other methods here as needed
