@@ -2,11 +2,12 @@ import numpy as np
 from typing import List, Dict
 
 def secure_aggregate(vectors: List[np.ndarray], epsilon: float = 0.1) -> np.ndarray:
-    aggregate = np.zeros_like(vectors[0])
+    aggregate = np.zeros_like(vectors[0], dtype=float)
     for vector in vectors:
         noise = np.random.laplace(0, 1/epsilon, vector.shape)
-        aggregate += vector + noise
-    return aggregate / len(vectors)
+        aggregate += vector.astype(float) + noise
+    result = aggregate / len(vectors)
+    return np.clip(result, 0, 10)  # Clip the result to be between 0 and 10
 
 class DifferentialPrivacy:
     def __init__(self, epsilon: float, delta: float):
@@ -17,13 +18,13 @@ class DifferentialPrivacy:
         sensitivity = 1.0  # Assuming normalized data
         noise_scale = np.sqrt(2 * np.log(1.25 / self.delta)) / self.epsilon
         noise = np.random.normal(0, noise_scale * sensitivity, data.shape)
-        return data + noise
+        return data.astype(float) + noise
 
 def federated_average(models: List[Dict[str, np.ndarray]], dp: DifferentialPrivacy) -> Dict[str, np.ndarray]:
-    averaged_model = {k: np.zeros_like(v) for k, v in models[0].items()}
+    averaged_model = {k: np.zeros_like(v, dtype=float) for k, v in models[0].items()}
     for model in models:
         for k, v in model.items():
-            averaged_model[k] += dp.add_noise(v)
+            averaged_model[k] += dp.add_noise(v.astype(float))
     for k in averaged_model:
         averaged_model[k] /= len(models)
     return averaged_model
@@ -44,11 +45,15 @@ class SecureMultiPartyComputation:
 
 def private_set_intersection(set1: set, set2: set, dp: DifferentialPrivacy) -> set:
     intersection = set1.intersection(set2)
-    noisy_size = int(len(intersection) + dp.add_noise(np.array([len(intersection)]))[0])
+    noisy_size = max(0, int(len(intersection) + dp.add_noise(np.array([len(intersection)]))[0]))
     if noisy_size > len(intersection):
-        additional = np.random.choice(list(set1.union(set2) - intersection), noisy_size - len(intersection), replace=False)
+        additional = np.random.choice(list(set1.union(set2) - intersection), 
+                                      min(noisy_size - len(intersection), len(set1.union(set2) - intersection)), 
+                                      replace=False)
         intersection.update(additional)
     elif noisy_size < len(intersection):
-        to_remove = np.random.choice(list(intersection), len(intersection) - noisy_size, replace=False)
+        to_remove = np.random.choice(list(intersection), 
+                                     min(len(intersection) - noisy_size, len(intersection)), 
+                                     replace=False)
         intersection.difference_update(to_remove)
     return intersection
