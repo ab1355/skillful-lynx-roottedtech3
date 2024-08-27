@@ -44,10 +44,11 @@ async def test_enhanced_collaborative_intelligence():
         print(f"  Specialization strength: {agent.specialization_strength:.2f}")
         print(f"  Expertise levels: {agent.expertise_level}")
         print(f"  Ramp-up boost: {agent.ramp_up_boost:.2f}")
-        if agent.mentor:
-            print(f"  Mentor: {agent.mentor.agent_id}")
-        if agent.mentee:
-            print(f"  Mentee: {agent.mentee.agent_id}")
+        print(f"  Utilization score: {agent.utilization_score:.2f}")
+        if agent.mentors:
+            print(f"  Mentors: {', '.join([mentor.agent_id for mentor in agent.mentors])}")
+        if agent.mentees:
+            print(f"  Mentees: {', '.join([mentee.agent_id for mentee in agent.mentees])}")
 
     print("\n4. Knowledge Sharing Statistics:")
     for agent in mas.agents:
@@ -131,13 +132,16 @@ async def test_enhanced_collaborative_intelligence():
     for i, report in enumerate(mentoring_reports[-5:], 1):
         print(f"Report {i}:")
         for mentor, data in report.items():
-            print(f"  Mentor {mentor} - Mentee {data['mentee']}:")
+            print(f"  Mentor {mentor} - Mentees: {', '.join(data['mentees'])}")
             for domain, improvement in data['improvements'].items():
                 print(f"    {domain}: {improvement:.4f}")
 
     print("\n14. Final Performance Thresholds:")
     print(f"Add agent threshold: {mas.add_agent_threshold:.2f}")
     print(f"Remove agent threshold: {mas.remove_agent_threshold:.2f}")
+
+    print("\n15. Task Complexity Adjustment:")
+    print(f"Final task complexity adjustment: {mas.task_complexity_adjustment:.2f}")
 
     print("\nEnhanced Collaborative Intelligence test completed successfully!")
 
