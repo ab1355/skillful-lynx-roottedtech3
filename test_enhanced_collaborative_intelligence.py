@@ -28,9 +28,9 @@ async def test_enhanced_collaborative_intelligence():
         print(f"{agent.agent_id} reputation: {agent.reputation:.2f}")
 
     print("\n2. Extended Simulation:")
-    num_steps = 300  # Increased simulation steps
+    num_steps = 500  # Increased simulation steps
     for step in range(num_steps):
-        if step % 30 == 0:
+        if step % 50 == 0:
             print(f"Step {step}/{num_steps}")
         await mas.run_simulation(1)
     final_performance = mas.evaluate_system_performance()
@@ -125,7 +125,16 @@ async def test_enhanced_collaborative_intelligence():
     plt.savefig("domain_performance.png")
     print("Domain performance graph saved as 'domain_performance.png'")
 
-    print("\n13. Final Performance Thresholds:")
+    print("\n13. Mentoring Impact:")
+    mentoring_reports = mas.get_mentoring_reports()
+    for i, report in enumerate(mentoring_reports[-5:], 1):
+        print(f"Report {i}:")
+        for mentor, data in report.items():
+            print(f"  Mentor {mentor} - Mentee {data['mentee']}:")
+            for domain, improvement in data['improvements'].items():
+                print(f"    {domain}: {improvement:.4f}")
+
+    print("\n14. Final Performance Thresholds:")
     print(f"Add agent threshold: {mas.add_agent_threshold:.2f}")
     print(f"Remove agent threshold: {mas.remove_agent_threshold:.2f}")
 

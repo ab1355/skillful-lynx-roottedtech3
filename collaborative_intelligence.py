@@ -31,6 +31,7 @@ class Agent:
         }
         self.mentor = None
         self.mentee = None
+        self.mentoring_impact = defaultdict(list)  # Track impact of mentoring
 
     async def process_task(self, task: Task) -> Tuple[str, float]:
         processing_time = task.complexity * (1 / self.reputation) * (1 / self.expertise_level[task.domain])
@@ -101,9 +102,14 @@ class Agent:
         return current_time - self.last_information_request >= 7
 
     def increase_expertise(self, domain: str):
+        old_expertise = self.expertise_level[domain]
         self.expertise_level[domain] = min(10, self.expertise_level[domain] + 0.1)
         if self.mentee:
+            mentee_old_expertise = self.mentee.expertise_level[domain]
             self.mentee.expertise_level[domain] = min(self.mentee.expertise_level[domain] + 0.05, self.expertise_level[domain])
+            mentee_expertise_gain = self.mentee.expertise_level[domain] - mentee_old_expertise
+            self.mentoring_impact[domain].append(mentee_expertise_gain)
+        return self.expertise_level[domain] - old_expertise
 
 class MultiAgentSystem:
     def __init__(self, agents: List[Agent]):
@@ -118,6 +124,7 @@ class MultiAgentSystem:
         self.add_agent_threshold = 0.7
         self.remove_agent_threshold = 0.4
         self.domain_performance = defaultdict(list)
+        self.mentoring_reports = []
         for agent in self.agents:
             agent.creation_time = self.current_time
 
@@ -146,7 +153,7 @@ class MultiAgentSystem:
             workload_score = 1 / (1 + abs(agent_workloads[agent] - avg_workload))
             specialization_score = 2 if agent.specialization == task.domain else 1
             warm_up_score = min(1, (self.current_time - agent.creation_time) / 3)
-            integration_score = 3 if agent.total_tasks_processed < 50 else 1
+            integration_score = 5 if agent.total_tasks_processed < 50 else 1  # Increased boost for newer agents
             catch_up_score = 1 + max(0, (avg_workload - agent.total_tasks_processed) / avg_workload)
             domain_balance_score = domain_workloads[task.domain] / total_domain_workload if total_domain_workload > 0 else 1
             expertise_score = agent.expertise_level[task.domain]
@@ -274,6 +281,7 @@ class MultiAgentSystem:
         self.performance_history.append(system_performance)
         self.workload_history.append(self._get_workload_distribution())
         self._update_domain_performance()
+        self._generate_mentoring_report()
         self.log.append(f"Time {self.current_time}: System performance: {system_performance:.2f}")
         return system_performance
 
@@ -304,6 +312,17 @@ class MultiAgentSystem:
                 avg_performance = sum(agent.performance_by_task_type[domain]['success'] / max(1, agent.performance_by_task_type[domain]['total']) for agent in domain_agents) / len(domain_agents)
                 self.domain_performance[domain].append(avg_performance)
 
+    def _generate_mentoring_report(self):
+        report = {}
+        for agent in self.agents:
+            if agent.mentee:
+                mentee_improvements = {domain: sum(impacts) / len(impacts) if impacts else 0 for domain, impacts in agent.mentoring_impact.items()}
+                report[agent.agent_id] = {
+                    "mentee": agent.mentee.agent_id,
+                    "improvements": mentee_improvements
+                }
+        self.mentoring_reports.append(report)
+
     def _adjust_agent_specializations(self):
         for agent in self.agents:
             if agent.specialization_change_cooldown > 0:
@@ -313,7 +332,7 @@ class MultiAgentSystem:
             best_specialization = agent.get_best_specialization()
             if best_specialization != agent.specialization:
                 performance_diff = agent.get_performance_difference()
-                change_probability = min(1.0, performance_diff * 15)  # Increased sensitivity
+                change_probability = min(1.0, performance_diff * 20)  # Increased sensitivity
                 if random.random() < change_probability:
                     self._remove_mentorship(agent)
                     self.log.append(f"Time {self.current_time}: {agent.agent_id} changed specialization from {agent.specialization} to {best_specialization}")
@@ -422,3 +441,6 @@ class MultiAgentSystem:
 
     def get_domain_performance(self):
         return self.domain_performance
+
+    def get_mentoring_reports(self):
+        return self.mentoring_reports
