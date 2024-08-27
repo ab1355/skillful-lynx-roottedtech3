@@ -28,9 +28,9 @@ async def test_enhanced_collaborative_intelligence():
         print(f"{agent.agent_id} reputation: {agent.reputation:.2f}")
 
     print("\n2. Extended Simulation:")
-    num_steps = 300  # Increased simulation steps
+    num_steps = 100  # Reduced simulation steps
     for step in range(num_steps):
-        if step % 50 == 0:
+        if step % 10 == 0:
             print(f"Step {step}/{num_steps}")
         await mas.run_simulation(1)
     final_performance = mas.evaluate_system_performance()
@@ -41,11 +41,13 @@ async def test_enhanced_collaborative_intelligence():
     print("\n3. Agent Specializations:")
     for agent in mas.agents:
         print(f"{agent.agent_id} final specialization: {agent.specialization}")
+        print(f"  Specialization strength: {agent.specialization_strength:.2f}")
 
     print("\n4. Knowledge Sharing Statistics:")
     for agent in mas.agents:
         print(f"{agent.agent_id} knowledge base size: {len(agent.knowledge_base)}")
-        print(f"  Knowledge topics: {list(agent.knowledge_base.keys())[:5]}...")  # Show first 5 topics
+        print(f"  Knowledge specialization: {dict(agent.knowledge_specialization)}")
+        print(f"  Top 5 knowledge topics: {list(agent.knowledge_base.keys())[:5]}")
 
     print("\n5. Task Performance by Type:")
     for agent in mas.agents:
@@ -80,7 +82,7 @@ async def test_enhanced_collaborative_intelligence():
     workload_history = mas.get_workload_history()
     plt.figure(figsize=(12, 6))
     for agent_id in workload_history[0].keys():
-        agent_workload = [wl[agent_id] for wl in workload_history]
+        agent_workload = [wl[agent_id] for wl in workload_history if agent_id in wl]
         plt.plot(agent_workload, label=agent_id)
     plt.title("Workload Distribution Over Time")
     plt.xlabel("Evaluation Interval")
@@ -95,6 +97,20 @@ async def test_enhanced_collaborative_intelligence():
     print("Last 10 specialization changes:")
     for change in specialization_changes[-10:]:
         print(f"Time {change[0]}: {change[1]} changed from {change[2]} to {change[3]}")
+
+    print("\n11. Long-term Performance Analysis:")
+    long_term_performance = mas.get_long_term_performance()
+    plt.figure(figsize=(10, 6))
+    plt.plot(long_term_performance)
+    plt.title("Long-term System Performance")
+    plt.xlabel("Analysis Interval")
+    plt.ylabel("Average Performance")
+    plt.savefig("long_term_performance.png")
+    print("Long-term performance graph saved as 'long_term_performance.png'")
+
+    print("\n12. Final Performance Thresholds:")
+    print(f"Add agent threshold: {mas.add_agent_threshold:.2f}")
+    print(f"Remove agent threshold: {mas.remove_agent_threshold:.2f}")
 
     print("\nEnhanced Collaborative Intelligence test completed successfully!")
 

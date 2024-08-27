@@ -22,11 +22,13 @@ class Agent:
         self.creation_time = 0
         self.specialization_change_cooldown = 0
         self.total_tasks_processed = 0
+        self.specialization_strength = 1.0
+        self.knowledge_specialization = defaultdict(float)
 
     async def process_task(self, task: Task) -> Tuple[str, float]:
         processing_time = task.complexity * (1 / self.reputation)
         await asyncio.sleep(processing_time)
-        success_probability = min(1.0, self.reputation / task.complexity)
+        success_probability = min(1.0, (self.reputation * self.specialization_strength) / task.complexity)
         success = random.random() < success_probability
         result = 1.0 if success else 0.0
         self.task_history.append((task.task_id, result))
@@ -36,6 +38,9 @@ class Agent:
         
         if success:
             self.generate_knowledge(task)
+            self.update_specialization_strength(task.domain, 0.1)
+        else:
+            self.update_specialization_strength(task.domain, -0.05)
         
         return task.task_id, result
 
@@ -47,21 +52,33 @@ class Agent:
             'confidence': confidence,
             'domain': task.domain
         }
+        self.knowledge_specialization[task.domain] += 0.1
 
     def update_knowledge(self, new_knowledge: Dict[str, Any]):
         for key, value in new_knowledge.items():
             if key not in self.knowledge_base or value.get('confidence', 0) > self.knowledge_base[key].get('confidence', 0):
                 self.knowledge_base[key] = value
+                self.knowledge_specialization[value['domain']] += 0.05
 
     def decide_knowledge_to_share(self) -> Dict[str, Any]:
-        return {k: v for k, v in self.knowledge_base.items() if v.get('confidence', 0) > 0.6}
+        specialized_knowledge = {k: v for k, v in self.knowledge_base.items() 
+                                 if v.get('confidence', 0) > 0.6 and v['domain'] == self.specialization}
+        return specialized_knowledge
 
-    async def request_information(self, topic: str, mas: 'MultiAgentSystem'):
-        self.last_information_request = mas.current_time
-        return await mas.handle_information_request(self, topic)
+    def update_specialization_strength(self, domain: str, change: float):
+        if domain == self.specialization:
+            self.specialization_strength = max(0.5, min(2.0, self.specialization_strength + change))
 
-    def train_on_local_data(self, X: np.ndarray, y: np.ndarray):
-        self.model.train(X, y)
+    def get_best_specialization(self) -> str:
+        if not self.performance_by_task_type:
+            return self.specialization
+        return max(self.performance_by_task_type, key=lambda x: self.performance_by_task_type[x]['success'] / max(1, self.performance_by_task_type[x]['total']))
+
+    def get_performance_difference(self) -> float:
+        if len(self.performance_by_task_type) < 2:
+            return 0
+        performances = [perf['success'] / max(1, perf['total']) for perf in self.performance_by_task_type.values()]
+        return max(performances) - min(performances)
 
     def get_parameters(self) -> Dict[str, np.ndarray]:
         return self.model.get_parameters()
@@ -75,17 +92,6 @@ class Agent:
     def should_request_information(self, current_time: int) -> bool:
         return current_time - self.last_information_request >= 7
 
-    def get_best_specialization(self) -> str:
-        if not self.performance_by_task_type:
-            return self.specialization
-        return max(self.performance_by_task_type, key=lambda x: self.performance_by_task_type[x]['success'] / max(1, self.performance_by_task_type[x]['total']))
-
-    def get_performance_difference(self) -> float:
-        if len(self.performance_by_task_type) < 2:
-            return 0
-        performances = [perf['success'] / max(1, perf['total']) for perf in self.performance_by_task_type.values()]
-        return max(performances) - min(performances)
-
 class MultiAgentSystem:
     def __init__(self, agents: List[Agent]):
         self.agents = agents
@@ -95,6 +101,9 @@ class MultiAgentSystem:
         self.performance_history = []
         self.workload_history = []
         self.specialization_changes = []
+        self.long_term_performance = []
+        self.add_agent_threshold = 0.7
+        self.remove_agent_threshold = 0.4
         for agent in self.agents:
             agent.creation_time = self.current_time
 
@@ -111,14 +120,15 @@ class MultiAgentSystem:
 
     def _choose_agent_for_task(self, agents: List[Agent], task: Task, agent_workloads: Dict[Agent, int]) -> Agent:
         agent_scores = []
-        avg_workload = sum(agent_workloads.values()) / len(agent_workloads)
+        avg_workload = max(1, sum(agent_workloads.values()) / len(agent_workloads))  # Ensure non-zero average
         for agent in agents:
             performance_score = self._calculate_agent_performance(agent)
             workload_score = 1 / (1 + abs(agent_workloads[agent] - avg_workload))
             specialization_score = 2 if agent.specialization == task.domain else 1
             warm_up_score = min(1, (self.current_time - agent.creation_time) / 3)
-            integration_score = 2 if agent.total_tasks_processed < 50 else 1  # Boost for newer agents
-            total_score = performance_score * workload_score * specialization_score * warm_up_score * integration_score
+            integration_score = 3 if agent.total_tasks_processed < 50 else 1  # Increased boost for newer agents
+            catch_up_score = 1 + max(0, (avg_workload - agent.total_tasks_processed) / avg_workload)
+            total_score = performance_score * workload_score * specialization_score * warm_up_score * integration_score * catch_up_score
             agent_scores.append((agent, total_score))
         chosen_agent = max(agent_scores, key=lambda x: x[1])[0]
         self.log.append(f"Time {self.current_time}: Chose {chosen_agent.agent_id} for task {task.task_id}")
@@ -167,7 +177,7 @@ class MultiAgentSystem:
 
             if agent.should_request_information(self.current_time):
                 topic = self._choose_information_request_topic(agent)
-                info = await agent.request_information(topic, self)
+                info = await self.handle_information_request(agent, topic)
                 if info:
                     agent.update_knowledge({topic: info})
                     self.log.append(f"Time {self.current_time}: {agent.agent_id} received information on {topic}")
@@ -243,7 +253,7 @@ class MultiAgentSystem:
 
     def _get_workload_distribution(self):
         total_tasks = sum(agent.total_tasks_processed for agent in self.agents)
-        return {agent.agent_id: agent.total_tasks_processed / total_tasks for agent in self.agents}
+        return {agent.agent_id: agent.total_tasks_processed / max(1, total_tasks) for agent in self.agents}
 
     def _adjust_agent_specializations(self):
         for agent in self.agents:
@@ -254,12 +264,37 @@ class MultiAgentSystem:
             best_specialization = agent.get_best_specialization()
             if best_specialization != agent.specialization:
                 performance_diff = agent.get_performance_difference()
-                change_probability = min(1.0, performance_diff * 3)  # Increased change probability
+                change_probability = min(1.0, performance_diff * 5)  # Increased change probability
                 if random.random() < change_probability:
                     self.log.append(f"Time {self.current_time}: {agent.agent_id} changed specialization from {agent.specialization} to {best_specialization}")
                     self.specialization_changes.append((self.current_time, agent.agent_id, agent.specialization, best_specialization))
                     agent.specialization = best_specialization
-                    agent.specialization_change_cooldown = 5  # Reduced cooldown period
+                    agent.specialization_strength = 1.0  # Reset specialization strength
+                    agent.specialization_change_cooldown = 3  # Reduced cooldown period
+
+    def _update_performance_thresholds(self):
+        if len(self.performance_history) > 10:
+            recent_performance = self.performance_history[-10:]
+            trend = sum(recent_performance) / len(recent_performance)
+            self.add_agent_threshold = max(0.6, min(0.8, trend + 0.1))
+            self.remove_agent_threshold = max(0.3, min(0.5, trend - 0.1))
+
+    def _long_term_performance_analysis(self):
+        if len(self.performance_history) > 50:
+            long_term_avg = sum(self.performance_history[-50:]) / 50
+            self.long_term_performance.append(long_term_avg)
+            if len(self.long_term_performance) > 5:
+                trend = (self.long_term_performance[-1] - self.long_term_performance[-5]) / 5
+                if trend < -0.01:
+                    self.log.append(f"Time {self.current_time}: Long-term performance declining. Adjusting system parameters.")
+                    self._adjust_system_parameters()
+
+    def _adjust_system_parameters(self):
+        # Example adjustments based on long-term performance decline
+        for agent in self.agents:
+            agent.reputation *= 0.9  # Slightly reduce all agent reputations to encourage improvement
+        self.add_agent_threshold *= 0.95  # Make it slightly easier to add new agents
+        self.remove_agent_threshold *= 1.05  # Make it slightly harder to remove agents
 
     async def run_simulation(self, num_steps: int):
         for _ in range(num_steps):
@@ -275,10 +310,12 @@ class MultiAgentSystem:
 
             if self.current_time % 10 == 0:
                 performance = self.evaluate_system_performance()
-                if performance < 0.4 and len(self.agents) > 3:
+                self._update_performance_thresholds()
+                self._long_term_performance_analysis()
+                if performance < self.remove_agent_threshold and len(self.agents) > 3:
                     worst_agent = min(self.agents, key=lambda a: a.reputation)
                     self.remove_agent(worst_agent)
-                elif performance > 0.7 and len(self.agents) < 10:
+                elif performance > self.add_agent_threshold and len(self.agents) < 10:
                     new_agent = Agent(f"Agent_{len(self.agents)+1}", random.choice(['classification', 'regression', 'clustering']), random.choice(['classification', 'regression', 'clustering']))
                     self.add_agent(new_agent)
 
@@ -295,3 +332,6 @@ class MultiAgentSystem:
 
     def get_specialization_changes(self):
         return self.specialization_changes
+
+    def get_long_term_performance(self):
+        return self.long_term_performance
